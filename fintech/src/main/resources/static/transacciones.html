@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transacciones · Fintech</title>
+    <title>Transacciones · Colibrí Pagos</title>
     <link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>
 <header>
-    <h1>Plataforma Fintech de Billeteras Digitales</h1>
+    <h1>Colibrí Pagos</h1>
 </header>
 
 <nav>
@@ -28,18 +28,30 @@
         <h2>Transacciones</h2>
 
         <form id="form-transaccion" class="formulario">
-            <select name="tipo" required>
-                <option value="RECARGA">Recarga</option>
-                <option value="RETIRO">Retiro</option>
-                <option value="TRANSFERENCIA">Transferencia</option>
-            </select>
-            <select name="codigoOrigen" id="select-origen">
-                <option value="">Cargando billeteras...</option>
-            </select>
-            <select name="codigoDestino" id="select-destino">
-                <option value="">Cargando billeteras...</option>
-            </select>
-            <input name="valor" type="number" min="1" step="any" placeholder="Valor" required>
+            <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 160px;font-size:.9rem;color:var(--tinta-suave)">
+                Tipo
+                <select name="tipo" id="select-tipo">
+                    <option value="RECARGA">Recarga</option>
+                    <option value="RETIRO">Retiro</option>
+                    <option value="TRANSFERENCIA">Transferencia</option>
+                </select>
+            </label>
+
+            <label id="campo-origen" style="display:flex;flex-direction:column;gap:4px;flex:1 1 220px;font-size:.9rem;color:var(--tinta-suave)">
+                Cuenta de origen
+                <select name="codigoOrigen" id="select-origen"></select>
+            </label>
+
+            <label id="campo-destino" style="display:flex;flex-direction:column;gap:4px;flex:1 1 220px;font-size:.9rem;color:var(--tinta-suave)">
+                Cuenta de destino
+                <select name="codigoDestino" id="select-destino"></select>
+            </label>
+
+            <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 140px;font-size:.9rem;color:var(--tinta-suave)">
+                Valor
+                <input name="valor" type="number" min="1" step="any" required>
+            </label>
+
             <button type="submit">Registrar</button>
         </form>
 

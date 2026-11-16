@@ -3,47 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Billeteras | Plataforma Fintech</title>
+    <title>Billeteras · Colibrí Pagos</title>
     <link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>
 <header>
-    <h1>Plataforma Fintech de Billeteras Digitales</h1>
+    <h1>Colibrí Pagos</h1>
 </header>
+
 <nav>
     <a href="index.html">Inicio</a>
     <a href="usuarios.html">Usuarios</a>
-    <a href="billeteras.html">Billeteras</a>
+    <a href="billeteras.html" class="activo">Billeteras</a>
     <a href="transacciones.html">Transacciones</a>
     <a href="programadas.html">Programadas</a>
     <a href="beneficios.html">Beneficios</a>
     <a href="auditoria.html">Auditoría</a>
 </nav>
+
 <main>
     <div id="mensajes" class="mensaje" hidden></div>
+
     <section class="seccion">
         <h2>Billeteras</h2>
+
         <form id="form-billetera" class="formulario">
-            <input name="codigo" placeholder="Código" required>
-            <input name="nombre" placeholder="Nombre" required>
-            <select name="tipo" required>
-                <option value="AHORROS">Ahorros</option>
-                <option value="CORRIENTE">Corriente</option>
-                <option value="DIGITAL">Digital</option>
-            </select>
-            <input name="identificacionTitular" placeholder="Identificación del titular" required>
-            <input name="saldoInicial" type="number" step="0.01" min="0" placeholder="Saldo inicial">
-            <input name="umbralSaldoBajo" type="number" step="0.01" min="0" placeholder="Umbral de saldo bajo">
+            <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 180px;font-size:.9rem;color:var(--tinta-suave)">
+                Nombre de la cuenta
+                <input name="nombre" required placeholder="Ej: Ahorros de viaje">
+            </label>
+
+            <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 160px;font-size:.9rem;color:var(--tinta-suave)">
+                Tipo
+                <select name="tipo">
+                    <option value="AHORROS">Ahorros</option>
+                    <option value="CORRIENTE">Corriente</option>
+                    <option value="DIGITAL">Digital</option>
+                </select>
+            </label>
+
+            <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 220px;font-size:.9rem;color:var(--tinta-suave)">
+                Titular
+                <select name="identificacionTitular" id="select-titular" required></select>
+            </label>
+
+            <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 160px;font-size:.9rem;color:var(--tinta-suave)">
+                Saldo inicial
+                <input name="saldoInicial" type="number" min="0" step="any" value="0" required>
+            </label>
+
+            <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 160px;font-size:.9rem;color:var(--tinta-suave)">
+                Aviso de saldo bajo
+                <input name="umbralSaldoBajo" type="number" min="0" step="any" value="0" required>
+            </label>
+
             <button type="submit">Crear billetera</button>
         </form>
-        <table>
+
+        <table id="tabla-billeteras">
             <thead>
-                <tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Titular</th><th>Saldo</th><th>Estado</th></tr>
+            <tr>
+                <th>Código</th>
+                <th>Nombre</th>
+                <th>Tipo</th>
+                <th>Titular</th>
+                <th>Saldo</th>
+                <th>Estado</th>
+            </tr>
             </thead>
-            <tbody id="tabla-billeteras"></tbody>
+            <tbody></tbody>
         </table>
     </section>
 </main>
+
 <script src="js/comun.js"></script>
 <script src="js/billeteras.js"></script>
 </body>

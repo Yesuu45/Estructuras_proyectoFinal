@@ -1,7 +1,11 @@
-// Módulo de transacciones: registra operaciones, lista billeteras en desplegables y permite revertir.
+// Módulo de transacciones.
+// Recarga: solo cuenta de destino. Retiro: solo cuenta de origen. Transferencia: origen y destino.
 const RUTA_API = '/api';
 
 const formulario = document.getElementById('form-transaccion');
+const selectTipo = document.getElementById('select-tipo');
+const campoOrigen = document.getElementById('campo-origen');
+const campoDestino = document.getElementById('campo-destino');
 const selectOrigen = document.getElementById('select-origen');
 const selectDestino = document.getElementById('select-destino');
 const tablaCuerpo = document.querySelector('#tabla-transacciones tbody');
@@ -35,14 +39,28 @@ async function llamar(metodo, ruta, datos) {
     return cuerpo;
 }
 
+// Muestra solo los campos que el tipo de operación necesita.
+// Los campos ocultos quedan deshabilitados, así no se envían.
+function ajustarCampos() {
+    const tipo = selectTipo.value;
+    const usaOrigen = tipo !== 'RECARGA';
+    const usaDestino = tipo !== 'RETIRO';
+
+    campoOrigen.hidden = !usaOrigen;
+    campoDestino.hidden = !usaDestino;
+    selectOrigen.disabled = !usaOrigen;
+    selectDestino.disabled = !usaDestino;
+    selectOrigen.required = usaOrigen;
+    selectDestino.required = usaDestino;
+}
+
 async function cargarBilleteras() {
     const billeteras = await llamar('GET', '/billeteras');
     const opciones = billeteras.map(b =>
         `<option value="${escapar(b.codigo)}">${escapar(b.codigo)} · ${escapar(b.nombre)} (titular ${escapar(b.identificacionTitular)})</option>`
     ).join('');
-    const vacia = '<option value="">— ninguna —</option>';
-    selectOrigen.innerHTML = vacia + opciones;
-    selectDestino.innerHTML = vacia + opciones;
+    selectOrigen.innerHTML = '<option value="">— elige una cuenta —</option>' + opciones;
+    selectDestino.innerHTML = '<option value="">— elige una cuenta —</option>' + opciones;
 }
 
 async function cargarTransacciones() {
@@ -67,6 +85,8 @@ async function recargarTodo() {
     await Promise.all([cargarBilleteras(), cargarTransacciones()]);
 }
 
+selectTipo.addEventListener('change', ajustarCampos);
+
 formulario.addEventListener('submit', async (evento) => {
     evento.preventDefault();
     const datos = Object.fromEntries(new FormData(formulario));
@@ -79,6 +99,7 @@ formulario.addEventListener('submit', async (evento) => {
         });
         mostrar('Transacción registrada', false);
         formulario.reset();
+        ajustarCampos();
         await cargarTransacciones();
     } catch (error) {
         mostrar(error.message, true);
@@ -95,4 +116,5 @@ async function revertir(id) {
     }
 }
 
+ajustarCampos();
 recargarTodo().catch(error => mostrar(error.message, true));
