@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Colibrí Pagos">
+  <title>Colibrí Pagos</title>
+  <rect width="48" height="48" rx="10" fill="#1E5A4A"/>
+  <path d="M24 26C22 15 15 9 7 9C12 17 16 23 24 28Z" fill="#FFFFFF" opacity="0.8"/>
+  <ellipse cx="24" cy="28" rx="8" ry="4.6" transform="rotate(-30 24 28)" fill="#FFFFFF"/>
+  <polygon points="18,33 9,42 14,43 22,36" fill="#E8643C"/>
+  <circle cx="32" cy="20" r="4.4" fill="#FFFFFF"/>
+  <polygon points="35.6,18.4 44.5,14 36.2,21.4" fill="#E8643C"/>
+  <circle cx="33.2" cy="19" r="1" fill="#1E5A4A"/>
+</svg>

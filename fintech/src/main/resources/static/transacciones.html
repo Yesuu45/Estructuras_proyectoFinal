@@ -3,45 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transacciones | Plataforma Fintech</title>
+    <title>Transacciones · Fintech</title>
     <link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>
 <header>
     <h1>Plataforma Fintech de Billeteras Digitales</h1>
 </header>
+
 <nav>
     <a href="index.html">Inicio</a>
     <a href="usuarios.html">Usuarios</a>
     <a href="billeteras.html">Billeteras</a>
-    <a href="transacciones.html">Transacciones</a>
+    <a href="transacciones.html" class="activo">Transacciones</a>
     <a href="programadas.html">Programadas</a>
     <a href="beneficios.html">Beneficios</a>
     <a href="auditoria.html">Auditoría</a>
 </nav>
+
 <main>
     <div id="mensajes" class="mensaje" hidden></div>
+
     <section class="seccion">
         <h2>Transacciones</h2>
+
         <form id="form-transaccion" class="formulario">
             <select name="tipo" required>
                 <option value="RECARGA">Recarga</option>
                 <option value="RETIRO">Retiro</option>
                 <option value="TRANSFERENCIA">Transferencia</option>
             </select>
-            <input name="codigoOrigen" placeholder="Billetera origen">
-            <input name="codigoDestino" placeholder="Billetera destino">
-            <input name="valor" type="number" step="0.01" min="0.01" placeholder="Valor" required>
+            <select name="codigoOrigen" id="select-origen">
+                <option value="">Cargando billeteras...</option>
+            </select>
+            <select name="codigoDestino" id="select-destino">
+                <option value="">Cargando billeteras...</option>
+            </select>
+            <input name="valor" type="number" min="1" step="any" placeholder="Valor" required>
             <button type="submit">Registrar</button>
         </form>
-        <table>
+
+        <table id="tabla-transacciones">
             <thead>
-                <tr><th>Id</th><th>Fecha</th><th>Tipo</th><th>Valor</th><th>Origen</th><th>Destino</th><th>Estado</th><th>Acción</th></tr>
+            <tr>
+                <th>Id</th>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Valor</th>
+                <th>Origen</th>
+                <th>Destino</th>
+                <th>Estado</th>
+                <th>Puntos</th>
+                <th></th>
+            </tr>
             </thead>
-            <tbody id="tabla-transacciones"></tbody>
+            <tbody></tbody>
         </table>
     </section>
 </main>
+
 <script src="js/comun.js"></script>
 <script src="js/transacciones.js"></script>
 </body>

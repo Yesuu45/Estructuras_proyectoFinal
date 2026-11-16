@@ -1,149 +1,337 @@
-* {
+/* Plataforma Fintech de Billeteras Digitales
+   Paleta: selva profunda (principal), guayaba (acento), tinta (texto).
+   Los nombres de clase se conservan para que las páginas no cambien de HTML. */
+
+:root {
+    --tinta: #17201C;
+    --tinta-suave: #4A5650;
+    --selva: #1E5A4A;
+    --selva-oscura: #143D32;
+    --guayaba: #E8643C;
+    --fondo: #F3F5F2;
+    --superficie: #FFFFFF;
+    --linea: #D9E0DA;
+    --ok: #1E6B3A;
+    --ok-fondo: #E6F2EA;
+    --error: #B3261E;
+    --error-fondo: #FBE9E7;
+    --radio: 4px;
+    --fuente: "Segoe UI", "Source Sans 3", system-ui, -apple-system, sans-serif;
+}
+
+*,
+*::before,
+*::after {
     box-sizing: border-box;
+}
+
+[hidden] {
+    display: none !important;
 }
 
 body {
     margin: 0;
-    font-family: system-ui, sans-serif;
-    background: #f3f5f8;
-    color: #1d2330;
+    font-family: var(--fuente);
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--tinta);
+    background: var(--fondo);
 }
 
+/* ---------- Cabecera ---------- */
+
 header {
-    background: #1f3b64;
-    color: #fff;
-    padding: 1rem 2rem;
+    background: var(--tinta);
+    color: #FFFFFF;
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 header h1 {
     margin: 0;
-    font-size: 1.4rem;
+    font-size: 1.15rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
+/* Marca: colibrí del logo (img/logo.svg) */
+header h1::before {
+    content: "";
+    width: 36px;
+    height: 36px;
+    flex: none;
+    background: url("../img/logo.svg") center / contain no-repeat;
+}
+
+/* ---------- Navegación ---------- */
+
 nav {
+    background: var(--superficie);
+    border-bottom: 1px solid var(--linea);
+    padding: 0 32px;
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    background: #fff;
-    padding: 0.75rem 2rem;
-    border-bottom: 1px solid #dde2ea;
+    gap: 4px;
+    overflow-x: auto;
 }
 
 nav a {
-    padding: 0.5rem 1rem;
-    border: 1px solid #c5ccd8;
-    border-radius: 6px;
-    color: #1d2330;
+    position: relative;
+    padding: 14px 12px;
+    color: var(--tinta-suave);
     text-decoration: none;
-    background: #fff;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+nav a::after {
+    content: "";
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: -1px;
+    height: 2px;
+    background: transparent;
+    transition: background-color 160ms ease;
+}
+
+nav a:hover {
+    color: var(--tinta);
 }
 
 nav a.activo {
-    background: #1f3b64;
-    color: #fff;
-    border-color: #1f3b64;
+    color: var(--tinta);
+    font-weight: 600;
 }
 
+nav a.activo::after {
+    background: var(--guayaba);
+}
+
+nav a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+    outline: 3px solid var(--selva);
+    outline-offset: 2px;
+}
+
+/* ---------- Contenido ---------- */
+
 main {
-    padding: 1.5rem 2rem;
-    max-width: 1100px;
+    max-width: 960px;
     margin: 0 auto;
+    padding: 32px 24px 64px;
 }
 
 .seccion {
-    background: #fff;
-    border-radius: 10px;
-    padding: 1.5rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    background: var(--superficie);
+    border: 1px solid var(--linea);
+    border-radius: var(--radio);
+    padding: 28px 32px;
+    margin-bottom: 24px;
 }
 
 .seccion h2 {
-    margin-top: 0;
+    margin: 0 0 20px;
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
 }
+
+.seccion h3 {
+    margin: 32px 0 12px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--tinta-suave);
+}
+
+/* ---------- Formularios ---------- */
 
 .formulario {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
+    gap: 10px;
+    align-items: center;
+    padding-bottom: 24px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--linea);
 }
 
 .formulario input,
 .formulario select {
-    padding: 0.5rem;
-    border: 1px solid #c5ccd8;
-    border-radius: 6px;
-    min-width: 160px;
+    flex: 1 1 180px;
+    min-width: 0;
+    padding: 10px 12px;
+    font: inherit;
+    color: var(--tinta);
+    background: var(--superficie);
+    border: 1px solid #B7C2BB;
+    border-radius: var(--radio);
 }
 
-button[type="submit"],
-.secundario {
-    padding: 0.5rem 1rem;
-    background: #1f3b64;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
+.formulario input::placeholder {
+    color: var(--tinta-suave);
+}
+
+.formulario input:focus,
+.formulario select:focus {
+    border-color: var(--selva);
+}
+
+button {
+    padding: 10px 18px;
+    font: inherit;
+    font-weight: 600;
+    color: #FFFFFF;
+    background: var(--selva);
+    border: 1px solid var(--selva);
+    border-radius: var(--radio);
     cursor: pointer;
+    transition: background-color 160ms ease;
 }
 
-.secundario {
-    margin-bottom: 1rem;
+button:hover {
+    background: var(--selva-oscura);
 }
+
+/* Acción secundaria dentro de una tabla */
+table button {
+    padding: 4px 10px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--selva);
+    background: transparent;
+    border-color: var(--selva);
+}
+
+table button:hover {
+    color: #FFFFFF;
+    background: var(--selva);
+}
+
+/* ---------- Tablas ---------- */
 
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 0.5rem;
+    margin-top: 12px;
+    font-variant-numeric: tabular-nums;
 }
 
 th,
 td {
-    padding: 0.5rem;
-    border-bottom: 1px solid #e3e8ef;
+    padding: 12px 10px;
     text-align: left;
-    font-size: 0.95rem;
+    border-bottom: 1px solid var(--linea);
+    vertical-align: middle;
 }
 
 th {
-    background: #f7f9fc;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--tinta-suave);
+    border-bottom-color: #B7C2BB;
 }
 
+tbody tr:hover td {
+    background: #F7F9F7;
+}
+
+/* ---------- Mensajes ---------- */
+
 .mensaje {
-    padding: 0.75rem 1rem;
-    border-radius: 6px;
-    margin-bottom: 1rem;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    border-radius: var(--radio);
+    border-left: 4px solid currentColor;
+    font-weight: 500;
 }
 
 .mensaje.ok {
-    background: #e6f6ec;
-    color: #1d6b3a;
+    color: var(--ok);
+    background: var(--ok-fondo);
 }
 
 .mensaje.error {
-    background: #fdecec;
-    color: #9b1c1c;
+    color: var(--error);
+    background: var(--error-fondo);
 }
 
-.mensaje[hidden] {
-    display: none;
-}
+/* ---------- Resumen (inicio) ---------- */
 
 .tarjetas {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1rem;
+    grid-template-columns: repeat(3, 1fr);
+    margin: 8px 0 0;
+    border-top: 1px solid var(--linea);
+    border-bottom: 1px solid var(--linea);
 }
 
 .tarjeta {
-    background: #fff;
-    border-radius: 10px;
-    padding: 1rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-    text-decoration: none;
-    color: inherit;
+    padding: 24px 20px;
 }
 
-.tarjeta strong {
+.tarjeta + .tarjeta {
+    border-left: 1px solid var(--linea);
+}
+
+.tarjeta .etiqueta,
+.tarjeta p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--tinta-suave);
+}
+
+.tarjeta strong,
+.tarjeta .cifra {
     display: block;
-    font-size: 1.8rem;
+    margin-top: 6px;
+    font-size: 2.4rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--selva);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Adaptación a pantallas pequeñas ---------- */
+
+@media (max-width: 720px) {
+    header,
+    nav {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
+
+    main {
+        padding: 20px 14px 48px;
+    }
+
+    .seccion {
+        padding: 20px 18px;
+    }
+
+    .tarjetas {
+        grid-template-columns: 1fr;
+    }
+
+    .tarjeta + .tarjeta {
+        border-left: none;
+        border-top: 1px solid var(--linea);
+    }
+}
+
+/* ---------- Movimiento reducido ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        transition: none !important;
+        animation: none !important;
+    }
 }
