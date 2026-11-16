@@ -17,15 +17,15 @@ public class BilleteraController {
     }
 
     @GetMapping
-    public Billetera[] listar() {
-        return servicio.listarBilleteras();
+    public Billetera[] listar(HttpSession sesion) {
+        return servicio.listarBilleteras(SesionActual.identificacion(sesion));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Billetera crear(@RequestBody BilleteraRequest solicitud, HttpSession sesion) {
         // El titular es siempre quien inició sesión; se ignora lo que venga en la solicitud
-        String titular = (String) sesion.getAttribute(AutenticacionController.ATRIBUTO_USUARIO);
+        String titular = SesionActual.identificacion(sesion);
         return servicio.crearBilletera(
                 solicitud.codigo(),
                 solicitud.nombre(),

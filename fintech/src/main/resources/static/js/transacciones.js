@@ -60,7 +60,10 @@ async function cargarBilleteras() {
         `<option value="${escapar(b.codigo)}">${escapar(b.codigo)} · ${escapar(b.nombre)} (titular ${escapar(b.identificacionTitular)})</option>`
     ).join('');
     selectOrigen.innerHTML = '<option value="">— elige una cuenta —</option>' + opciones;
-    selectDestino.innerHTML = '<option value="">— elige una cuenta —</option>' + opciones;
+    // El destino se escribe por código (puede ser de otra persona); estas son solo sugerencias
+    document.getElementById('mis-billeteras').innerHTML = billeteras.map(b =>
+        `<option value="${escapar(b.codigo)}">${escapar(b.nombre)}</option>`
+    ).join('');
 }
 
 async function cargarTransacciones() {

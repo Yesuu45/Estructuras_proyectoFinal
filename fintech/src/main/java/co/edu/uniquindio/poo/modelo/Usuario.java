@@ -10,15 +10,21 @@ public class Usuario {
     private String nombre;
     private String correo;
     private final String claveHash;
+    private final Rol rol;
     private int puntos;
     private final TablaHash<String, Billetera> billeteras;
 
     /** claveHash puede ser null solo para usuarios antiguos sin contraseña; esos no pueden iniciar sesión. */
     public Usuario(String identificacion, String nombre, String correo, String claveHash) {
+        this(identificacion, nombre, correo, claveHash, Rol.USUARIO);
+    }
+
+    public Usuario(String identificacion, String nombre, String correo, String claveHash, Rol rol) {
         this.identificacion = validarTexto(identificacion, "La identificación");
         this.nombre = validarTexto(nombre, "El nombre");
         this.correo = correo == null ? "" : correo.trim();
         this.claveHash = claveHash;
+        this.rol = rol == null ? Rol.USUARIO : rol;
         this.puntos = 0;
         this.billeteras = new TablaHash<>();
     }
@@ -44,6 +50,14 @@ public class Usuario {
     // Sin prefijo get: así Jackson no lo incluye en el JSON que llega al navegador
     public String hashClave() {
         return claveHash;
+    }
+
+    public Rol getRol() {
+        return rol;
+    }
+
+    public boolean esAdmin() {
+        return rol == Rol.ADMIN;
     }
 
     public int cantidadBilleteras() {

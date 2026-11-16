@@ -2,14 +2,9 @@ package co.edu.uniquindio.poo.ui;
 
 import co.edu.uniquindio.poo.modelo.Transaccion;
 import co.edu.uniquindio.poo.servicio.PlataformaService;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/transacciones")
@@ -22,19 +17,19 @@ public class TransaccionController {
     }
 
     @GetMapping
-    public Transaccion[] listar() {
-        return servicio.listarTransacciones();
+    public Transaccion[] listar(HttpSession sesion) {
+        return servicio.listarTransacciones(SesionActual.identificacion(sesion));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Transaccion registrar(@RequestBody TransaccionRequest solicitud) {
-        return servicio.operar(solicitud.tipo(), solicitud.codigoOrigen(),
+    public Transaccion registrar(@RequestBody TransaccionRequest solicitud, HttpSession sesion) {
+        return servicio.operar(SesionActual.identificacion(sesion), solicitud.tipo(), solicitud.codigoOrigen(),
                 solicitud.codigoDestino(), solicitud.valor());
     }
 
     @PostMapping("/{id}/revertir")
-    public Transaccion revertir(@PathVariable String id) {
-        return servicio.revertir(id);
+    public Transaccion revertir(@PathVariable String id, HttpSession sesion) {
+        return servicio.revertir(SesionActual.identificacion(sesion), id);
     }
 }

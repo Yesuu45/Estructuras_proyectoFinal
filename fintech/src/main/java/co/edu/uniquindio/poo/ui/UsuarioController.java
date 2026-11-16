@@ -2,6 +2,7 @@ package co.edu.uniquindio.poo.ui;
 
 import co.edu.uniquindio.poo.modelo.Usuario;
 import co.edu.uniquindio.poo.servicio.PlataformaService;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,8 +17,8 @@ public class UsuarioController {
     }
 
     @GetMapping
-    public Usuario[] listar() {
-        return servicio.listarUsuarios();
+    public Usuario[] listar(HttpSession sesion) {
+        return servicio.listarUsuarios(SesionActual.identificacion(sesion));
     }
 
     @PostMapping

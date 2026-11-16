@@ -66,20 +66,27 @@ function marcarPaginaActiva() {
 
 marcarPaginaActiva();
 
-// Barra de sesión: muestra quién entró y permite salir. Sin sesión, el fetch envuelto redirige a login.html
+// Quién está conectado (una sola consulta que usan todas las páginas). Sin sesión, el fetch envuelto redirige a login.html
+const sesionActual = fetch(API + '/auth/yo').then(r => (r.ok ? r.json() : null));
+
+// Barra de sesión: muestra quién entró y permite salir.
 async function mostrarSesion() {
-    const respuesta = await fetch(API + '/auth/yo');
-    if (!respuesta.ok) {
+    const usuario = await sesionActual;
+    if (!usuario) {
         return;
     }
-    const usuario = await respuesta.json();
+    if (usuario.rol !== 'ADMIN') {
+        // Solo el administrador ve la lista de usuarios
+        document.querySelectorAll('nav a[href="usuarios.html"]').forEach(a => a.remove());
+    }
     const nav = document.querySelector('nav');
     if (!nav) {
         return;
     }
     const caja = document.createElement('div');
     caja.className = 'sesion';
-    caja.innerHTML = '<span>' + escapar(usuario.nombre) + ' · ' + escapar(usuario.nivel) + '</span>'
+    const etiqueta = usuario.rol === 'ADMIN' ? 'Administrador' : usuario.nivel;
+    caja.innerHTML = '<span>' + escapar(usuario.nombre) + ' · ' + escapar(etiqueta) + '</span>'
         + '<a href="../login.html" id="cerrar-sesion">Cerrar sesión</a>';
     nav.appendChild(caja);
     document.getElementById('cerrar-sesion').addEventListener('click', async evento => {

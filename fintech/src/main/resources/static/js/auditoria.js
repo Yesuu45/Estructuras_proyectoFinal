@@ -1,9 +1,14 @@
 async function cargarAuditoria() {
-    const eventos = await peticion('GET', '/auditoria/eventos');
-    pintar('tabla-eventos', eventos.map(e =>
-        `<tr><td>${escapar(e.fecha)}</td><td>${escapar(e.identificacionUsuario)}</td>
-         <td>${escapar(e.evento)}</td><td>${escapar(e.nivelRiesgo)}</td>
-         <td>${escapar(e.detalle)}</td></tr>`));
+    const yo = await sesionActual;
+    if (yo && yo.rol === 'ADMIN') {
+        const eventos = await peticion('GET', '/auditoria/eventos');
+        pintar('tabla-eventos', eventos.map(e =>
+            `<tr><td>${escapar(e.fecha)}</td><td>${escapar(e.identificacionUsuario)}</td>
+             <td>${escapar(e.evento)}</td><td>${escapar(e.nivelRiesgo)}</td>
+             <td>${escapar(e.detalle)}</td></tr>`));
+    } else {
+        document.getElementById('bloque-eventos').remove();
+    }
 
     const notificaciones = await peticion('GET', '/auditoria/notificaciones');
     pintar('tabla-notificaciones', notificaciones.map(n =>

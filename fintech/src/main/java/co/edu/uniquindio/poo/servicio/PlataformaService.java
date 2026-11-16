@@ -4,6 +4,7 @@ import co.edu.uniquindio.poo.Estructuras.Cola;
 import co.edu.uniquindio.poo.Estructuras.MonticuloBinario;
 import co.edu.uniquindio.poo.Estructuras.TablaHash;
 import co.edu.uniquindio.poo.modelo.*;
+import co.edu.uniquindio.poo.seguridad.AccesoDenegadoException;
 import co.edu.uniquindio.poo.seguridad.ClaveSegura;
 import org.springframework.stereotype.Service;
 
@@ -42,6 +43,15 @@ public class PlataformaService {
         return usuario;
     }
 
+    /** Crea la cuenta de administrador si no existe. La llama InicializadorAdmin al arrancar. */
+    public void sembrarAdministrador(String identificacion, String nombre, String clave) {
+        if (usuarios.containsKey(identificacion)) {
+            return;
+        }
+        usuarios.put(identificacion,
+                new Usuario(identificacion, nombre, "", ClaveSegura.generarHash(clave), Rol.ADMIN));
+    }
+
     /** Mismo mensaje si falla la identificación o la contraseña, para no revelar qué usuarios existen. */
     public Usuario autenticar(String identificacion, String clave) {
         Usuario usuario = identificacion == null ? null : usuarios.get(identificacion.trim());
@@ -59,7 +69,9 @@ public class PlataformaService {
         return usuario;
     }
 
-    public Usuario[] listarUsuarios() {
+    /** Solo el administrador puede ver a todos los usuarios. */
+    public Usuario[] listarUsuarios(String actor) {
+        exigirAdmin(actor, "Solo el administrador puede ver la lista de usuarios");
         Cola<String> claves = usuarios.claves();
         Usuario[] resultado = new Usuario[claves.getSize()];
         for (int i = 0; i < resultado.length; i++) {
@@ -96,27 +108,46 @@ public class PlataformaService {
         return billetera;
     }
 
-    public Billetera[] listarBilleteras() {
+    /** El administrador ve todas; un usuario normal, solo las suyas. */
+    public Billetera[] listarBilleteras(String actor) {
+        boolean admin = esAdmin(actor);
         Cola<String> claves = billeteras.claves();
-        Billetera[] resultado = new Billetera[claves.getSize()];
+        Cola<Billetera> visibles = new Cola<>();
+        while (!claves.isEmpty()) {
+            Billetera billetera = billeteras.get(claves.desencolar());
+            if (admin || billetera.getIdentificacionTitular().equals(actor)) {
+                visibles.encolar(billetera);
+            }
+        }
+        Billetera[] resultado = new Billetera[visibles.getSize()];
         for (int i = 0; i < resultado.length; i++) {
-            resultado[i] = billeteras.get(claves.desencolar());
+            resultado[i] = visibles.desencolar();
         }
         return resultado;
     }
 
     // ---------- Transacciones ----------
 
-    public Transaccion operar(TipoTransaccion tipo, String origen, String destino, BigDecimal valor) {
+    public Transaccion operar(String actor, TipoTransaccion tipo, String origen, String destino, BigDecimal valor) {
         if (tipo == null) {
             throw new IllegalArgumentException("El tipo de operación es obligatorio");
         }
         String codigoOrigen = normalizar(origen);
         String codigoDestino = normalizar(destino);
         return switch (tipo) {
-            case RECARGA -> recargar(codigoDestino, valor);
-            case RETIRO -> retirar(codigoOrigen, valor);
-            case TRANSFERENCIA -> transferir(codigoOrigen, codigoDestino, valor);
+            case RECARGA -> {
+                exigirBilleteraPropia(actor, codigoDestino);
+                yield recargar(codigoDestino, valor);
+            }
+            case RETIRO -> {
+                exigirBilleteraPropia(actor, codigoOrigen);
+                yield retirar(codigoOrigen, valor);
+            }
+            case TRANSFERENCIA -> {
+                // Solo el origen debe ser propio: se puede transferir a billeteras de otras personas
+                exigirBilleteraPropia(actor, codigoOrigen);
+                yield transferir(codigoOrigen, codigoDestino, valor);
+            }
             case PAGO_PROGRAMADO -> throw new IllegalArgumentException(
                     "Los pagos programados se crean en la sección Programadas");
         };
@@ -145,7 +176,7 @@ public class PlataformaService {
         return ejecutarMovimiento(TipoTransaccion.TRANSFERENCIA, codigoOrigen, codigoDestino, valor, 3);
     }
 
-    public Transaccion revertir(String id) {
+    public Transaccion revertir(String actor, String id) {
         Transaccion transaccion = buscarTransaccion(id);
         if (transaccion.getEstado() != EstadoTransaccion.COMPLETADA) {
             throw new IllegalStateException("Solo se puede revertir una transacción completada");
@@ -155,13 +186,15 @@ public class PlataformaService {
         Billetera destino = transaccion.getCodigoDestino() == null
                 ? null : buscarBilletera(transaccion.getCodigoDestino());
 
+        String titular = origen != null ? origen.getIdentificacionTitular() : destino.getIdentificacionTitular();
+        exigirPropietario(actor, titular, "Solo quien hizo la transacción puede revertirla");
+
         if (origen != null && !origen.isActiva()) {
             throw new IllegalStateException("La billetera origen está bloqueada");
         }
         if (destino != null && destino.getSaldo().compareTo(transaccion.getValor()) < 0) {
             throw new IllegalStateException("La billetera destino no tiene saldo suficiente para revertir");
         }
-        String titular = origen != null ? origen.getIdentificacionTitular() : destino.getIdentificacionTitular();
         Usuario usuarioTitular = buscarUsuario(titular);
         if (usuarioTitular.getPuntos() < transaccion.getPuntosGenerados()) {
             throw new IllegalStateException("El usuario no tiene puntos suficientes para revertir");
@@ -187,25 +220,35 @@ public class PlataformaService {
         return transaccion;
     }
 
-    public Transaccion[] listarTransacciones() {
+    /** Un usuario normal ve las transacciones donde una de sus billeteras es origen o destino. */
+    public Transaccion[] listarTransacciones(String actor) {
+        boolean admin = esAdmin(actor);
         Cola<String> claves = transacciones.claves();
-        Transaccion[] resultado = new Transaccion[claves.getSize()];
+        Cola<Transaccion> visibles = new Cola<>();
+        while (!claves.isEmpty()) {
+            Transaccion transaccion = transacciones.get(claves.desencolar());
+            if (admin || esBilleteraDe(actor, transaccion.getCodigoOrigen())
+                    || esBilleteraDe(actor, transaccion.getCodigoDestino())) {
+                visibles.encolar(transaccion);
+            }
+        }
+        Transaccion[] resultado = new Transaccion[visibles.getSize()];
         for (int i = 0; i < resultado.length; i++) {
-            resultado[i] = transacciones.get(claves.desencolar());
+            resultado[i] = visibles.desencolar();
         }
         return resultado;
     }
 
     // ---------- Operaciones programadas ----------
 
-    public OperacionProgramada programar(LocalDateTime fecha, TipoTransaccion tipo,
+    public OperacionProgramada programar(String actor, LocalDateTime fecha, TipoTransaccion tipo,
                                          String codigoOrigen, String codigoDestino, BigDecimal valor) {
         if (tipo != TipoTransaccion.TRANSFERENCIA && tipo != TipoTransaccion.PAGO_PROGRAMADO) {
             throw new IllegalArgumentException("Solo se pueden programar transferencias o pagos");
         }
         String origen = normalizar(codigoOrigen);
         String destino = normalizar(codigoDestino);
-        buscarBilletera(origen);
+        exigirBilleteraPropia(actor, origen);
         buscarBilletera(destino);
 
         String id = "P" + (++secuencia);
@@ -239,11 +282,20 @@ public class PlataformaService {
         return ejecutadas;
     }
 
-    public OperacionProgramada[] listarProgramadas() {
+    /** Un usuario normal ve solo las operaciones programadas desde sus billeteras. */
+    public OperacionProgramada[] listarProgramadas(String actor) {
+        boolean admin = esAdmin(actor);
         Cola<String> claves = programadas.claves();
-        OperacionProgramada[] resultado = new OperacionProgramada[claves.getSize()];
+        Cola<OperacionProgramada> visibles = new Cola<>();
+        while (!claves.isEmpty()) {
+            OperacionProgramada operacion = programadas.get(claves.desencolar());
+            if (admin || esBilleteraDe(actor, operacion.getCodigoOrigen())) {
+                visibles.encolar(operacion);
+            }
+        }
+        OperacionProgramada[] resultado = new OperacionProgramada[visibles.getSize()];
         for (int i = 0; i < resultado.length; i++) {
-            resultado[i] = programadas.get(claves.desencolar());
+            resultado[i] = visibles.desencolar();
         }
         return resultado;
     }
@@ -303,18 +355,28 @@ public class PlataformaService {
         return codigo;
     }
 
-    public Beneficio[] listarBeneficios() {
+    public Beneficio[] listarBeneficios(String actor) {
+        boolean admin = esAdmin(actor);
         Cola<Beneficio> copia = beneficios.clonarCola();
-        Beneficio[] resultado = new Beneficio[copia.getSize()];
+        Cola<Beneficio> visibles = new Cola<>();
+        while (!copia.isEmpty()) {
+            Beneficio beneficio = copia.desencolar();
+            if (admin || beneficio.getIdentificacionUsuario().equals(actor)) {
+                visibles.encolar(beneficio);
+            }
+        }
+        Beneficio[] resultado = new Beneficio[visibles.getSize()];
         for (int i = 0; i < resultado.length; i++) {
-            resultado[i] = copia.desencolar();
+            resultado[i] = visibles.desencolar();
         }
         return resultado;
     }
 
     // ---------- Auditoría y notificaciones ----------
 
-    public EventoAuditoria[] listarEventos() {
+    /** La auditoría completa es solo del administrador. */
+    public EventoAuditoria[] listarEventos(String actor) {
+        exigirAdmin(actor, "Solo el administrador puede ver la auditoría");
         Cola<EventoAuditoria> copia = eventos.clonarCola();
         EventoAuditoria[] resultado = new EventoAuditoria[copia.getSize()];
         for (int i = 0; i < resultado.length; i++) {
@@ -323,13 +385,55 @@ public class PlataformaService {
         return resultado;
     }
 
-    public Notificacion[] listarNotificaciones() {
+    public Notificacion[] listarNotificaciones(String actor) {
+        boolean admin = esAdmin(actor);
         Cola<Notificacion> copia = notificaciones.clonarCola();
-        Notificacion[] resultado = new Notificacion[copia.getSize()];
+        Cola<Notificacion> visibles = new Cola<>();
+        while (!copia.isEmpty()) {
+            Notificacion notificacion = copia.desencolar();
+            if (admin || notificacion.getIdentificacionUsuario().equals(actor)) {
+                visibles.encolar(notificacion);
+            }
+        }
+        Notificacion[] resultado = new Notificacion[visibles.getSize()];
         for (int i = 0; i < resultado.length; i++) {
-            resultado[i] = copia.desencolar();
+            resultado[i] = visibles.desencolar();
         }
         return resultado;
+    }
+
+    // ---------- Permisos ----------
+
+    private boolean esAdmin(String actor) {
+        Usuario usuario = actor == null ? null : usuarios.get(actor);
+        return usuario != null && usuario.esAdmin();
+    }
+
+    private void exigirAdmin(String actor, String mensaje) {
+        if (!esAdmin(actor)) {
+            throw new AccesoDenegadoException(mensaje);
+        }
+    }
+
+    /** true si la billetera existe y su titular es el actor. */
+    private boolean esBilleteraDe(String actor, String codigoBilletera) {
+        if (codigoBilletera == null) {
+            return false;
+        }
+        Billetera billetera = billeteras.get(codigoBilletera);
+        return billetera != null && billetera.getIdentificacionTitular().equals(actor);
+    }
+
+    /** Permite al administrador y al dueño de la billetera; a nadie más. */
+    private void exigirBilleteraPropia(String actor, String codigoBilletera) {
+        Billetera billetera = buscarBilletera(codigoBilletera);
+        exigirPropietario(actor, billetera.getIdentificacionTitular(), "Esa billetera no es tuya");
+    }
+
+    private void exigirPropietario(String actor, String titular, String mensaje) {
+        if (!esAdmin(actor) && !titular.equals(actor)) {
+            throw new AccesoDenegadoException(mensaje);
+        }
     }
 
     // ---------- Lógica interna ----------

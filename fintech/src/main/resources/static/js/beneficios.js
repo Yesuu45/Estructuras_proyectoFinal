@@ -2,7 +2,6 @@
 const RUTA_API = '/api';
 
 const formulario = document.getElementById('form-beneficio');
-const selectUsuario = document.getElementById('select-usuario');
 const selectBeneficio = document.getElementById('select-beneficio');
 const tablaCatalogo = document.querySelector('#tabla-catalogo tbody');
 const tablaCanjes = document.querySelector('#tabla-beneficios tbody');
@@ -36,13 +35,6 @@ async function llamar(metodo, ruta, datos) {
     return cuerpo;
 }
 
-async function cargarUsuarios() {
-    const usuarios = await llamar('GET', '/usuarios');
-    selectUsuario.innerHTML = '<option value="">— elige un usuario —</option>' + usuarios.map(u =>
-        `<option value="${escapar(u.identificacion)}">${escapar(u.nombre)} (${escapar(u.identificacion)}) · ${escapar(u.puntos)} pts</option>`
-    ).join('');
-}
-
 async function cargarCatalogo() {
     const catalogo = await llamar('GET', '/beneficios/catalogo');
     selectBeneficio.innerHTML = '<option value="">— elige un beneficio —</option>' + catalogo.map(b =>
@@ -68,7 +60,7 @@ async function cargarCanjes() {
 }
 
 async function recargarTodo() {
-    await Promise.all([cargarUsuarios(), cargarCatalogo(), cargarCanjes()]);
+    await Promise.all([cargarCatalogo(), cargarCanjes()]);
 }
 
 formulario.addEventListener('submit', async (evento) => {
@@ -76,7 +68,6 @@ formulario.addEventListener('submit', async (evento) => {
     const datos = Object.fromEntries(new FormData(formulario));
     try {
         await llamar('POST', '/beneficios', {
-            identificacionUsuario: datos.identificacionUsuario,
             idBeneficio: datos.idBeneficio
         });
         mostrar('Beneficio canjeado', false);

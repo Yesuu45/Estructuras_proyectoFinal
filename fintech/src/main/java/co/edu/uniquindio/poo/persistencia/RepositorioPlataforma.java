@@ -26,9 +26,11 @@ public class RepositorioPlataforma {
 
     // ---------- Escrituras ----------
 
-    public void insertarUsuario(String identificacion, String nombre, String correo, String claveHash, Nivel nivel) {
-        jdbc.update("INSERT INTO usuarios (identificacion, nombre, correo, clave_hash, puntos, nivel, fecha_registro) "
-                + "VALUES (?, ?, ?, ?, 0, ?, ?)", identificacion, nombre, correo, claveHash, nivel.name(), ahora());
+    public void insertarUsuario(String identificacion, String nombre, String correo, String claveHash,
+                                Rol rol, Nivel nivel) {
+        jdbc.update("INSERT INTO usuarios (identificacion, nombre, correo, clave_hash, rol, puntos, nivel, "
+                + "fecha_registro) VALUES (?, ?, ?, ?, ?, 0, ?, ?)",
+                identificacion, nombre, correo, claveHash, rol.name(), nivel.name(), ahora());
     }
 
     public void actualizarUsuario(String identificacion, int puntos, Nivel nivel) {
@@ -99,10 +101,11 @@ public class RepositorioPlataforma {
 
     public Cola<Usuario> cargarUsuarios() {
         Cola<Usuario> cola = new Cola<>();
-        jdbc.query("SELECT identificacion, nombre, correo, clave_hash, puntos FROM usuarios",
+        jdbc.query("SELECT identificacion, nombre, correo, clave_hash, rol, puntos FROM usuarios",
                 (RowCallbackHandler) rs -> {
                     Usuario usuario = new Usuario(rs.getString("identificacion"),
-                            rs.getString("nombre"), rs.getString("correo"), rs.getString("clave_hash"));
+                            rs.getString("nombre"), rs.getString("correo"), rs.getString("clave_hash"),
+                            Rol.valueOf(rs.getString("rol")));
                     int puntos = rs.getInt("puntos");
                     if (puntos > 0) {
                         usuario.sumarPuntos(puntos);

@@ -44,7 +44,8 @@
 
             <label id="campo-destino" style="display:flex;flex-direction:column;gap:4px;flex:1 1 220px;font-size:.9rem;color:var(--tinta-suave)">
                 Cuenta de destino
-                <select name="codigoDestino" id="select-destino"></select>
+                <input name="codigoDestino" id="select-destino" list="mis-billeteras" placeholder="Código de la billetera destino" autocomplete="off">
+                <datalist id="mis-billeteras"></datalist>
             </label>
 
             <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 140px;font-size:.9rem;color:var(--tinta-suave)">

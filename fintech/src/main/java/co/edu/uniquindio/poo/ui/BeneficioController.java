@@ -3,13 +3,9 @@ package co.edu.uniquindio.poo.ui;
 import co.edu.uniquindio.poo.modelo.Beneficio;
 import co.edu.uniquindio.poo.modelo.BeneficioDisponible;
 import co.edu.uniquindio.poo.servicio.PlataformaService;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/beneficios")
@@ -27,13 +23,14 @@ public class BeneficioController {
     }
 
     @GetMapping
-    public Beneficio[] listar() {
-        return servicio.listarBeneficios();
+    public Beneficio[] listar(HttpSession sesion) {
+        return servicio.listarBeneficios(SesionActual.identificacion(sesion));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Beneficio canjear(@RequestBody BeneficioRequest solicitud) {
-        return servicio.canjear(solicitud.identificacionUsuario(), solicitud.idBeneficio());
+    public Beneficio canjear(@RequestBody BeneficioRequest solicitud, HttpSession sesion) {
+        // Se canjea siempre con los puntos de quien inició sesión; se ignora el usuario de la solicitud
+        return servicio.canjear(SesionActual.identificacion(sesion), solicitud.idBeneficio());
     }
 }

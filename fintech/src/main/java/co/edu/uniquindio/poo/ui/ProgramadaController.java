@@ -2,13 +2,9 @@ package co.edu.uniquindio.poo.ui;
 
 import co.edu.uniquindio.poo.modelo.OperacionProgramada;
 import co.edu.uniquindio.poo.servicio.PlataformaService;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/programadas")
@@ -21,14 +17,14 @@ public class ProgramadaController {
     }
 
     @GetMapping
-    public OperacionProgramada[] listar() {
-        return servicio.listarProgramadas();
+    public OperacionProgramada[] listar(HttpSession sesion) {
+        return servicio.listarProgramadas(SesionActual.identificacion(sesion));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public OperacionProgramada programar(@RequestBody ProgramadaRequest solicitud) {
-        return servicio.programar(solicitud.fechaEjecucion(), solicitud.tipo(),
+    public OperacionProgramada programar(@RequestBody ProgramadaRequest solicitud, HttpSession sesion) {
+        return servicio.programar(SesionActual.identificacion(sesion), solicitud.fechaEjecucion(), solicitud.tipo(),
                 solicitud.codigoOrigen(), solicitud.codigoDestino(), solicitud.valor());
     }
 
