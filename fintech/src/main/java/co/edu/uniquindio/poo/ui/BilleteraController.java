@@ -2,13 +2,9 @@ package co.edu.uniquindio.poo.ui;
 
 import co.edu.uniquindio.poo.modelo.Billetera;
 import co.edu.uniquindio.poo.servicio.PlataformaService;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/billeteras")
@@ -27,12 +23,14 @@ public class BilleteraController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Billetera crear(@RequestBody BilleteraRequest solicitud) {
+    public Billetera crear(@RequestBody BilleteraRequest solicitud, HttpSession sesion) {
+        // El titular es siempre quien inició sesión; se ignora lo que venga en la solicitud
+        String titular = (String) sesion.getAttribute(AutenticacionController.ATRIBUTO_USUARIO);
         return servicio.crearBilletera(
                 solicitud.codigo(),
                 solicitud.nombre(),
                 solicitud.tipo(),
-                solicitud.identificacionTitular(),
+                titular,
                 solicitud.saldoInicial(),
                 solicitud.umbralSaldoBajo());
     }

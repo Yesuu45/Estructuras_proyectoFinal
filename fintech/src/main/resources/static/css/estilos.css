@@ -342,3 +342,19 @@ tbody tr:hover td {
         animation: none !important;
     }
 }
+
+/* Barra de sesión (a la derecha del menú) y notas */
+nav .sesion {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    white-space: nowrap;
+    color: var(--tinta-suave);
+    font-size: .9rem;
+}
+.nota {
+    margin: 0 0 12px;
+    color: var(--tinta-suave);
+    font-size: .9rem;
+}

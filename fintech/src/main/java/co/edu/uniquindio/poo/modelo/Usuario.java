@@ -2,19 +2,23 @@ package co.edu.uniquindio.poo.modelo;
 
 import co.edu.uniquindio.poo.Estructuras.Cola;
 import co.edu.uniquindio.poo.Estructuras.TablaHash;
+import co.edu.uniquindio.poo.seguridad.ClaveSegura;
 
 public class Usuario {
 
     private final String identificacion;
     private String nombre;
     private String correo;
+    private final String claveHash;
     private int puntos;
     private final TablaHash<String, Billetera> billeteras;
 
-    public Usuario(String identificacion, String nombre, String correo) {
+    /** claveHash puede ser null solo para usuarios antiguos sin contraseña; esos no pueden iniciar sesión. */
+    public Usuario(String identificacion, String nombre, String correo, String claveHash) {
         this.identificacion = validarTexto(identificacion, "La identificación");
         this.nombre = validarTexto(nombre, "El nombre");
         this.correo = correo == null ? "" : correo.trim();
+        this.claveHash = claveHash;
         this.puntos = 0;
         this.billeteras = new TablaHash<>();
     }
@@ -31,6 +35,15 @@ public class Usuario {
 
     public Billetera buscarBilletera(String codigo) {
         return billeteras.get(codigo);
+    }
+
+    public boolean coincideClave(String clave) {
+        return ClaveSegura.coincide(clave, claveHash);
+    }
+
+    // Sin prefijo get: así Jackson no lo incluye en el JSON que llega al navegador
+    public String hashClave() {
+        return claveHash;
     }
 
     public int cantidadBilleteras() {

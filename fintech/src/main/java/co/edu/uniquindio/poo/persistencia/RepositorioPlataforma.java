@@ -2,26 +2,14 @@ package co.edu.uniquindio.poo.persistencia;
 
 import co.edu.uniquindio.poo.Estructuras.Cola;
 import co.edu.uniquindio.poo.Estructuras.MonticuloBinario;
-import co.edu.uniquindio.poo.modelo.Beneficio;
-import co.edu.uniquindio.poo.modelo.Billetera;
-import co.edu.uniquindio.poo.modelo.EstadoOperacionProgramada;
-import co.edu.uniquindio.poo.modelo.EstadoTransaccion;
-import co.edu.uniquindio.poo.modelo.EventoAuditoria;
-import co.edu.uniquindio.poo.modelo.Nivel;
-import co.edu.uniquindio.poo.modelo.NivelRiesgo;
-import co.edu.uniquindio.poo.modelo.Notificacion;
-import co.edu.uniquindio.poo.modelo.OperacionProgramada;
-import co.edu.uniquindio.poo.modelo.TipoAlerta;
-import co.edu.uniquindio.poo.modelo.TipoBilletera;
-import co.edu.uniquindio.poo.modelo.TipoTransaccion;
-import co.edu.uniquindio.poo.modelo.Transaccion;
-import co.edu.uniquindio.poo.modelo.Usuario;
-import java.math.BigDecimal;
-import java.sql.Timestamp;
-import java.time.LocalDateTime;
+import co.edu.uniquindio.poo.modelo.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
+
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 /**
  * Acceso a PostgreSQL. Solo guarda y lee filas; las reglas de negocio siguen en PlataformaService.
@@ -38,9 +26,9 @@ public class RepositorioPlataforma {
 
     // ---------- Escrituras ----------
 
-    public void insertarUsuario(String identificacion, String nombre, String correo, Nivel nivel) {
-        jdbc.update("INSERT INTO usuarios (identificacion, nombre, correo, puntos, nivel, fecha_registro) "
-                + "VALUES (?, ?, ?, 0, ?, ?)", identificacion, nombre, correo, nivel.name(), ahora());
+    public void insertarUsuario(String identificacion, String nombre, String correo, String claveHash, Nivel nivel) {
+        jdbc.update("INSERT INTO usuarios (identificacion, nombre, correo, clave_hash, puntos, nivel, fecha_registro) "
+                + "VALUES (?, ?, ?, ?, 0, ?, ?)", identificacion, nombre, correo, claveHash, nivel.name(), ahora());
     }
 
     public void actualizarUsuario(String identificacion, int puntos, Nivel nivel) {
@@ -111,10 +99,10 @@ public class RepositorioPlataforma {
 
     public Cola<Usuario> cargarUsuarios() {
         Cola<Usuario> cola = new Cola<>();
-        jdbc.query("SELECT identificacion, nombre, correo, puntos FROM usuarios",
+        jdbc.query("SELECT identificacion, nombre, correo, clave_hash, puntos FROM usuarios",
                 (RowCallbackHandler) rs -> {
                     Usuario usuario = new Usuario(rs.getString("identificacion"),
-                            rs.getString("nombre"), rs.getString("correo"));
+                            rs.getString("nombre"), rs.getString("correo"), rs.getString("clave_hash"));
                     int puntos = rs.getInt("puntos");
                     if (puntos > 0) {
                         usuario.sumarPuntos(puntos);

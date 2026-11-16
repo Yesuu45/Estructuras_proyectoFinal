@@ -1,8 +1,7 @@
-// Módulo de billeteras. El código lo genera la aplicación; el titular se elige de la lista de usuarios.
+// Módulo de billeteras. El código lo genera la aplicación; el titular es quien inició sesión.
 const RUTA_API = '/api';
 
 const formulario = document.getElementById('form-billetera');
-const selectTitular = document.getElementById('select-titular');
 const tablaCuerpo = document.querySelector('#tabla-billeteras tbody');
 
 function escapar(texto) {
@@ -34,13 +33,6 @@ async function llamar(metodo, ruta, datos) {
     return cuerpo;
 }
 
-async function cargarTitulares() {
-    const usuarios = await llamar('GET', '/usuarios');
-    selectTitular.innerHTML = '<option value="">— elige un titular —</option>' + usuarios.map(u =>
-        `<option value="${escapar(u.identificacion)}">${escapar(u.nombre)} (${escapar(u.identificacion)})</option>`
-    ).join('');
-}
-
 async function cargarBilleteras() {
     const billeteras = await llamar('GET', '/billeteras');
     tablaCuerpo.innerHTML = billeteras.map(b => `
@@ -61,7 +53,6 @@ formulario.addEventListener('submit', async (evento) => {
         await llamar('POST', '/billeteras', {
             nombre: datos.nombre,
             tipo: datos.tipo,
-            identificacionTitular: datos.identificacionTitular,
             saldoInicial: Number(datos.saldoInicial),
             umbralSaldoBajo: Number(datos.umbralSaldoBajo)
         });
@@ -69,11 +60,11 @@ formulario.addEventListener('submit', async (evento) => {
         formulario.reset();
         formulario.elements['saldoInicial'].value = 0;
         formulario.elements['umbralSaldoBajo'].value = 0;
-        await Promise.all([cargarTitulares(), cargarBilleteras()]);
+        await cargarBilleteras();
     } catch (error) {
         mostrar(error.message, true);
     }
 });
 
-Promise.all([cargarTitulares(), cargarBilleteras()])
+cargarBilleteras()
     .catch(error => mostrar(error.message, true));

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar sesión · Colibrí Pagos</title>
+    <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+<header>
+    <h1>Colibrí Pagos</h1>
+</header>
+<main>
+    <div id="mensajes" class="mensaje" hidden></div>
+
+    <section class="seccion">
+        <h2>Iniciar sesión</h2>
+        <form id="form-login" class="formulario">
+            <input name="identificacion" placeholder="Identificación" required autocomplete="username">
+            <input name="clave" type="password" placeholder="Contraseña" required autocomplete="current-password">
+            <button type="submit">Entrar</button>
+        </form>
+    </section>
+
+    <section class="seccion">
+        <h2>Crear cuenta</h2>
+        <form id="form-registro" class="formulario">
+            <input name="identificacion" placeholder="Identificación" required autocomplete="username">
+            <input name="nombre" placeholder="Nombre" required autocomplete="name">
+            <input name="correo" type="email" placeholder="Correo" autocomplete="email">
+            <input name="clave" type="password" placeholder="Contraseña (mínimo 6 caracteres)" minlength="6" required autocomplete="new-password">
+            <button type="submit">Registrarme</button>
+        </form>
+    </section>
+</main>
+<script src="js/login.js"></script>
+</body>
+</html>

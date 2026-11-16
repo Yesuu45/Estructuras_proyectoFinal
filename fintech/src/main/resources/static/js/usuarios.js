@@ -5,5 +5,4 @@ async function cargarUsuarios() {
          <td>${escapar(u.correo)}</td><td>${u.puntos}</td><td>${escapar(u.nivel)}</td></tr>`));
 }
 
-conectarFormulario('form-usuario', '/usuarios', null, 'Usuario registrado', cargarUsuarios);
 cargarUsuarios().catch(err => mostrarMensaje(err.message, 'error'));

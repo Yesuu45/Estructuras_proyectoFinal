@@ -3,23 +3,12 @@ package co.edu.uniquindio.poo.servicio;
 import co.edu.uniquindio.poo.Estructuras.Cola;
 import co.edu.uniquindio.poo.Estructuras.MonticuloBinario;
 import co.edu.uniquindio.poo.Estructuras.TablaHash;
-import co.edu.uniquindio.poo.modelo.Beneficio;
-import co.edu.uniquindio.poo.modelo.BeneficioDisponible;
-import co.edu.uniquindio.poo.modelo.Billetera;
-import co.edu.uniquindio.poo.modelo.EstadoTransaccion;
-import co.edu.uniquindio.poo.modelo.EventoAuditoria;
-import co.edu.uniquindio.poo.modelo.Nivel;
-import co.edu.uniquindio.poo.modelo.NivelRiesgo;
-import co.edu.uniquindio.poo.modelo.Notificacion;
-import co.edu.uniquindio.poo.modelo.OperacionProgramada;
-import co.edu.uniquindio.poo.modelo.TipoAlerta;
-import co.edu.uniquindio.poo.modelo.TipoBilletera;
-import co.edu.uniquindio.poo.modelo.TipoTransaccion;
-import co.edu.uniquindio.poo.modelo.Transaccion;
-import co.edu.uniquindio.poo.modelo.Usuario;
+import co.edu.uniquindio.poo.modelo.*;
+import co.edu.uniquindio.poo.seguridad.ClaveSegura;
+import org.springframework.stereotype.Service;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import org.springframework.stereotype.Service;
 
 /**
  * Fachada de la plataforma. La interfaz (controladores) solo habla con esta clase.
@@ -44,12 +33,21 @@ public class PlataformaService {
 
     // ---------- Usuarios ----------
 
-    public Usuario registrarUsuario(String identificacion, String nombre, String correo) {
+    public Usuario registrarUsuario(String identificacion, String nombre, String correo, String clave) {
         if (usuarios.containsKey(identificacion)) {
             throw new IllegalStateException("Ya existe un usuario con identificación " + identificacion);
         }
-        Usuario usuario = new Usuario(identificacion, nombre, correo);
-        usuarios.put(identificacion, usuario);
+        Usuario usuario = new Usuario(identificacion, nombre, correo, ClaveSegura.generarHash(clave));
+        usuarios.put(usuario.getIdentificacion(), usuario);
+        return usuario;
+    }
+
+    /** Mismo mensaje si falla la identificación o la contraseña, para no revelar qué usuarios existen. */
+    public Usuario autenticar(String identificacion, String clave) {
+        Usuario usuario = identificacion == null ? null : usuarios.get(identificacion.trim());
+        if (usuario == null || !usuario.coincideClave(clave)) {
+            throw new IllegalArgumentException("Identificación o contraseña incorrectas");
+        }
         return usuario;
     }
 
@@ -82,7 +80,7 @@ public class PlataformaService {
         }
         Billetera billetera = new Billetera(codigoFinal, nombre, tipo, identificacionTitular,
                 saldoInicial, umbralSaldoBajo);
-        billeteras.put(codigo, billetera);
+        billeteras.put(codigoFinal, billetera);
         titular.agregarBilletera(billetera);
         return billetera;
     }

@@ -1,3 +1,14 @@
+// Si el servidor responde 401 (sin sesión) en cualquier llamada, vuelve a la pantalla de acceso.
+// Se envuelve fetch aquí porque varias páginas tienen su propia función de llamadas.
+const fetchOriginal = window.fetch.bind(window);
+window.fetch = async (...argumentos) => {
+    const respuesta = await fetchOriginal(...argumentos);
+    if (respuesta.status === 401) {
+        location.href = 'login.html';
+    }
+    return respuesta;
+};
+
 const API = '/api';
 
 function mostrarMensaje(texto, tipo = 'ok') {
@@ -54,3 +65,28 @@ function marcarPaginaActiva() {
 }
 
 marcarPaginaActiva();
+
+// Barra de sesión: muestra quién entró y permite salir. Sin sesión, el fetch envuelto redirige a login.html
+async function mostrarSesion() {
+    const respuesta = await fetch(API + '/auth/yo');
+    if (!respuesta.ok) {
+        return;
+    }
+    const usuario = await respuesta.json();
+    const nav = document.querySelector('nav');
+    if (!nav) {
+        return;
+    }
+    const caja = document.createElement('div');
+    caja.className = 'sesion';
+    caja.innerHTML = '<span>' + escapar(usuario.nombre) + ' · ' + escapar(usuario.nivel) + '</span>'
+        + '<a href="../login.html" id="cerrar-sesion">Cerrar sesión</a>';
+    nav.appendChild(caja);
+    document.getElementById('cerrar-sesion').addEventListener('click', async evento => {
+        evento.preventDefault();
+        await fetchOriginal(API + '/auth/logout', { method: 'POST' });
+        location.href = 'login.html';
+    });
+}
+
+mostrarSesion().catch(() => {});
