@@ -1,16 +1,44 @@
 package co.edu.uniquindio.poo.modelo;
 
+import co.edu.uniquindio.poo.Estructuras.Cola;
+import co.edu.uniquindio.poo.Estructuras.TablaHash;
+
 public class Usuario {
+
     private final String identificacion;
     private String nombre;
     private String correo;
     private int puntos;
+    private final TablaHash<String, Billetera> billeteras;
 
     public Usuario(String identificacion, String nombre, String correo) {
         this.identificacion = validarTexto(identificacion, "La identificación");
         this.nombre = validarTexto(nombre, "El nombre");
         this.correo = correo == null ? "" : correo.trim();
         this.puntos = 0;
+        this.billeteras = new TablaHash<>();
+    }
+
+    public void agregarBilletera(Billetera billetera) {
+        if (billetera == null) {
+            throw new IllegalArgumentException("La billetera no puede ser nula");
+        }
+        if (billeteras.containsKey(billetera.getCodigo())) {
+            throw new IllegalStateException("Ya existe la billetera " + billetera.getCodigo());
+        }
+        billeteras.put(billetera.getCodigo(), billetera);
+    }
+
+    public Billetera buscarBilletera(String codigo) {
+        return billeteras.get(codigo);
+    }
+
+    public int cantidadBilleteras() {
+        return billeteras.size();
+    }
+
+    public Cola<String> codigosBilleteras() {
+        return billeteras.claves();
     }
 
     public void sumarPuntos(int cantidad) {

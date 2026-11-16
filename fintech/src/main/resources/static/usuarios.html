@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usuarios | Plataforma Fintech</title>
+    <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+<header>
+    <h1>Plataforma Fintech de Billeteras Digitales</h1>
+</header>
+<nav>
+    <a href="index.html">Inicio</a>
+    <a href="usuarios.html">Usuarios</a>
+    <a href="billeteras.html">Billeteras</a>
+    <a href="transacciones.html">Transacciones</a>
+    <a href="programadas.html">Programadas</a>
+    <a href="beneficios.html">Beneficios</a>
+    <a href="auditoria.html">Auditoría</a>
+</nav>
+<main>
+    <div id="mensajes" class="mensaje" hidden></div>
+    <section class="seccion">
+        <h2>Usuarios</h2>
+        <form id="form-usuario" class="formulario">
+            <input name="identificacion" placeholder="Identificación" required>
+            <input name="nombre" placeholder="Nombre" required>
+            <input name="correo" type="email" placeholder="Correo">
+            <button type="submit">Registrar</button>
+        </form>
+        <table>
+            <thead>
+                <tr><th>Identificación</th><th>Nombre</th><th>Correo</th><th>Puntos</th><th>Nivel</th></tr>
+            </thead>
+            <tbody id="tabla-usuarios"></tbody>
+        </table>
+    </section>
+</main>
+<script src="js/comun.js"></script>
+<script src="js/usuarios.js"></script>
+</body>
+</html>

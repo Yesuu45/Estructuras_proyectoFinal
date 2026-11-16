@@ -1,0 +1,149 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+    background: #f3f5f8;
+    color: #1d2330;
+}
+
+header {
+    background: #1f3b64;
+    color: #fff;
+    padding: 1rem 2rem;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.4rem;
+}
+
+nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    background: #fff;
+    padding: 0.75rem 2rem;
+    border-bottom: 1px solid #dde2ea;
+}
+
+nav a {
+    padding: 0.5rem 1rem;
+    border: 1px solid #c5ccd8;
+    border-radius: 6px;
+    color: #1d2330;
+    text-decoration: none;
+    background: #fff;
+}
+
+nav a.activo {
+    background: #1f3b64;
+    color: #fff;
+    border-color: #1f3b64;
+}
+
+main {
+    padding: 1.5rem 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.seccion {
+    background: #fff;
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.seccion h2 {
+    margin-top: 0;
+}
+
+.formulario {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.formulario input,
+.formulario select {
+    padding: 0.5rem;
+    border: 1px solid #c5ccd8;
+    border-radius: 6px;
+    min-width: 160px;
+}
+
+button[type="submit"],
+.secundario {
+    padding: 0.5rem 1rem;
+    background: #1f3b64;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.secundario {
+    margin-bottom: 1rem;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5rem;
+}
+
+th,
+td {
+    padding: 0.5rem;
+    border-bottom: 1px solid #e3e8ef;
+    text-align: left;
+    font-size: 0.95rem;
+}
+
+th {
+    background: #f7f9fc;
+}
+
+.mensaje {
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+
+.mensaje.ok {
+    background: #e6f6ec;
+    color: #1d6b3a;
+}
+
+.mensaje.error {
+    background: #fdecec;
+    color: #9b1c1c;
+}
+
+.mensaje[hidden] {
+    display: none;
+}
+
+.tarjetas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.tarjeta {
+    background: #fff;
+    border-radius: 10px;
+    padding: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    text-decoration: none;
+    color: inherit;
+}
+
+.tarjeta strong {
+    display: block;
+    font-size: 1.8rem;
+}

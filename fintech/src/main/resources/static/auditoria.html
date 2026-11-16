@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auditoría | Plataforma Fintech</title>
+    <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+<header>
+    <h1>Plataforma Fintech de Billeteras Digitales</h1>
+</header>
+<nav>
+    <a href="index.html">Inicio</a>
+    <a href="usuarios.html">Usuarios</a>
+    <a href="billeteras.html">Billeteras</a>
+    <a href="transacciones.html">Transacciones</a>
+    <a href="programadas.html">Programadas</a>
+    <a href="beneficios.html">Beneficios</a>
+    <a href="auditoria.html">Auditoría</a>
+</nav>
+<main>
+    <div id="mensajes" class="mensaje" hidden></div>
+    <section class="seccion">
+        <h2>Auditoría y notificaciones</h2>
+        <h3>Eventos</h3>
+        <table>
+            <thead>
+                <tr><th>Fecha</th><th>Usuario</th><th>Evento</th><th>Riesgo</th><th>Detalle</th></tr>
+            </thead>
+            <tbody id="tabla-eventos"></tbody>
+        </table>
+        <h3>Notificaciones</h3>
+        <table>
+            <thead>
+                <tr><th>Fecha</th><th>Usuario</th><th>Tipo</th><th>Mensaje</th><th>Estado</th></tr>
+            </thead>
+            <tbody id="tabla-notificaciones"></tbody>
+        </table>
+    </section>
+</main>
+<script src="js/comun.js"></script>
+<script src="js/auditoria.js"></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beneficios | Plataforma Fintech</title>
+    <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+<header>
+    <h1>Plataforma Fintech de Billeteras Digitales</h1>
+</header>
+<nav>
+    <a href="index.html">Inicio</a>
+    <a href="usuarios.html">Usuarios</a>
+    <a href="billeteras.html">Billeteras</a>
+    <a href="transacciones.html">Transacciones</a>
+    <a href="programadas.html">Programadas</a>
+    <a href="beneficios.html">Beneficios</a>
+    <a href="auditoria.html">Auditoría</a>
+</nav>
+<main>
+    <div id="mensajes" class="mensaje" hidden></div>
+    <section class="seccion">
+        <h2>Beneficios</h2>
+        <form id="form-beneficio" class="formulario">
+            <input name="identificacionUsuario" placeholder="Identificación del usuario" required>
+            <input name="descripcion" placeholder="Descripción" required>
+            <input name="puntos" type="number" min="1" placeholder="Puntos" required>
+            <button type="submit">Canjear</button>
+        </form>
+        <table>
+            <thead>
+                <tr><th>Usuario</th><th>Descripción</th><th>Puntos</th><th>Fecha</th></tr>
+            </thead>
+            <tbody id="tabla-beneficios"></tbody>
+        </table>
+    </section>
+</main>
+<script src="js/comun.js"></script>
+<script src="js/beneficios.js"></script>
+</body>
+</html>
