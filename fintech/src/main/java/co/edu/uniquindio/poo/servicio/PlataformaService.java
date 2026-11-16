@@ -61,6 +61,10 @@ public class PlataformaService {
         return usuario;
     }
 
+    public boolean existeUsuario(String identificacion) {
+        return identificacion != null && usuarios.containsKey(identificacion);
+    }
+
     public Usuario buscarUsuario(String identificacion) {
         Usuario usuario = usuarios.get(identificacion);
         if (usuario == null) {
