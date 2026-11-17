@@ -32,8 +32,12 @@ CREATE TABLE IF NOT EXISTS transacciones (
     codigo_origen     VARCHAR(30),
     codigo_destino    VARCHAR(30),
     estado            VARCHAR(20)    NOT NULL DEFAULT 'COMPLETADA',
-    puntos_generados  INTEGER        NOT NULL DEFAULT 0
+    puntos_generados  INTEGER        NOT NULL DEFAULT 0,
+    nivel_riesgo      VARCHAR(20)    NOT NULL DEFAULT 'BAJO'
     );
+
+-- Por si la tabla ya existía de antes sin el nivel de riesgo
+ALTER TABLE transacciones ADD COLUMN IF NOT EXISTS nivel_riesgo VARCHAR(20) NOT NULL DEFAULT 'BAJO';
 
 CREATE TABLE IF NOT EXISTS operaciones_programadas (
                                                        id               VARCHAR(20)    PRIMARY KEY,
@@ -42,8 +46,16 @@ CREATE TABLE IF NOT EXISTS operaciones_programadas (
     valor            NUMERIC(18, 2) NOT NULL,
     codigo_origen    VARCHAR(30),
     codigo_destino   VARCHAR(30),
-    estado           VARCHAR(20)    NOT NULL DEFAULT 'PENDIENTE'
+    estado           VARCHAR(20)    NOT NULL DEFAULT 'PENDIENTE',
+    periodicidad     VARCHAR(20)    NOT NULL DEFAULT 'UNICA',
+    repeticiones_restantes INTEGER  NOT NULL DEFAULT 1,
+    avisada          BOOLEAN        NOT NULL DEFAULT FALSE
     );
+
+-- Por si la tabla ya existía de antes sin la periodicidad
+ALTER TABLE operaciones_programadas ADD COLUMN IF NOT EXISTS periodicidad VARCHAR(20) NOT NULL DEFAULT 'UNICA';
+ALTER TABLE operaciones_programadas ADD COLUMN IF NOT EXISTS repeticiones_restantes INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE operaciones_programadas ADD COLUMN IF NOT EXISTS avisada BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS beneficios (
                                           id                      SERIAL       PRIMARY KEY,
