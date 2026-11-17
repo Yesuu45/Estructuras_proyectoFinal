@@ -34,6 +34,23 @@
                 <label><input type="checkbox" id="reloj-ejecutar" checked> Ejecutar las programadas que venzan</label>
                 <button type="button" id="reloj-restablecer" class="secundario">Volver a la hora real</button>
             </div>
+            <h3>Simulación automática</h3>
+            <p class="nota">El reloj avanza solo, a intervalos, y ejecuta las programadas que van venciendo, como lo haría un planificador en segundo plano.</p>
+            <div class="formulario">
+                <select id="sim-paso">
+                    <option value="60">Avanzar 1 hora</option>
+                    <option value="1440" selected>Avanzar 1 día</option>
+                    <option value="10080">Avanzar 7 días</option>
+                </select>
+                <select id="sim-intervalo">
+                    <option value="1000">cada 1 segundo</option>
+                    <option value="2000" selected>cada 2 segundos</option>
+                    <option value="5000">cada 5 segundos</option>
+                </select>
+                <button type="button" id="sim-iniciar">Iniciar simulación</button>
+                <button type="button" id="sim-detener" class="secundario" hidden>Detener</button>
+            </div>
+            <ul id="sim-registro" class="nota"></ul>
         </div>
     </section>
     <section class="seccion">

@@ -152,10 +152,109 @@ document.getElementById('form-monto').addEventListener('submit', async evento =>
     }
 });
 
+// ---------- Requisitos adicionales ----------
+
+function recorrido(vertices, cerrado) {
+    const pasos = vertices.map(etiqueta);
+    return (cerrado ? [...pasos, pasos[0]] : pasos).join(' → ');
+}
+
+document.getElementById('form-actividad').addEventListener('submit', async evento => {
+    evento.preventDefault();
+    const datos = Object.fromEntries(new FormData(evento.target));
+    try {
+        const top = await peticion('GET',
+            `/reportes/actividad?desde=${encodeURIComponent(datos.desde)}&hasta=${encodeURIComponent(datos.hasta)}&n=5`);
+        document.getElementById('tabla-actividad-contenedor').hidden = top.length === 0;
+        document.getElementById('resultado-actividad').textContent = top.length === 0
+            ? 'No hubo transacciones en ese período.'
+            : `El usuario con mayor actividad entre ${datos.desde} y ${datos.hasta} es ${etiqueta(top[0].clave)} con ${top[0].cantidad} transacciones.`;
+        pintar('tabla-actividad', top.map((c, i) =>
+            `<tr><td>${i + 1}</td><td>${escapar(etiqueta(c.clave))}</td><td>${c.cantidad}</td></tr>`));
+    } catch (err) {
+        mostrarMensaje(err.message, 'error');
+    }
+});
+
+async function cargarCiclosYRutas() {
+    const red = document.getElementById('select-red').value;
+    const [ciclos, rutas] = await Promise.all([
+        peticion('GET', '/reportes/ciclos?red=' + red),
+        peticion('GET', '/reportes/rutas-frecuentes?n=5&red=' + red)
+    ]);
+    pintar('tabla-ciclos', ciclos.length === 0
+        ? ['<tr><td colspan="3">No hay ciclos: el dinero nunca regresa a quien lo envió</td></tr>']
+        : ciclos.map(c => `<tr><td>${escapar(recorrido(c.vertices, true))}</td><td>${c.frecuencia}</td><td>${escapar(c.total)}</td></tr>`));
+    pintar('tabla-rutas', rutas.length === 0
+        ? ['<tr><td colspan="4">Todavía no hay rutas de 2 o más saltos</td></tr>']
+        : rutas.map((r, i) => `<tr><td>${i + 1}</td><td>${escapar(recorrido(r.vertices, false))}</td><td>${r.frecuencia}</td><td>${escapar(r.total)}</td></tr>`));
+}
+document.getElementById('select-red').addEventListener('change', () =>
+    cargarCiclosYRutas().catch(err => mostrarMensaje(err.message, 'error')));
+
+async function cargarMayorValor() {
+    const n = document.getElementById('select-mayor-valor').value;
+    const transacciones = await peticion('GET', '/reportes/mayor-valor?n=' + n);
+    pintar('tabla-mayor-valor', transacciones.length === 0
+        ? ['<tr><td colspan="7">Todavía no hay transacciones</td></tr>']
+        : transacciones.map((t, i) => `<tr><td>${i + 1}</td><td>${escapar(t.id)}</td>
+            <td>${escapar(String(t.fecha).replace('T', ' ').substring(0, 16))}</td><td>${escapar(t.tipo)}</td>
+            <td>${escapar(t.valor)}</td><td>${escapar(t.codigoOrigen ?? '—')}</td><td>${escapar(t.codigoDestino ?? '—')}</td></tr>`));
+}
+document.getElementById('select-mayor-valor').addEventListener('change', () =>
+    cargarMayorValor().catch(err => mostrarMensaje(err.message, 'error')));
+
+function formatearTiempo(nanos) {
+    if (nanos >= 1e6) return (nanos / 1e6).toFixed(2) + ' ms';
+    if (nanos >= 1e3) return (nanos / 1e3).toFixed(1) + ' µs';
+    return nanos + ' ns';
+}
+
+// Una tabla por operación; la barra compara el tiempo total de cada estructura dentro de esa operación
+function pintarRendimiento(resultados) {
+    const grupos = [];
+    resultados.forEach(r => {
+        let grupo = grupos.find(g => g.operacion === r.operacion);
+        if (!grupo) {
+            grupo = { operacion: r.operacion, filas: [] };
+            grupos.push(grupo);
+        }
+        grupo.filas.push(r);
+    });
+    document.getElementById('resultado-rendimiento').innerHTML = grupos.map(g => {
+        const maximo = Math.max(...g.filas.map(f => f.nanosTotal), 1);
+        return `<h3>${escapar(g.operacion)}</h3>
+        <table>
+            <thead><tr><th>Estructura</th><th></th><th>Tiempo total</th><th>Por operación</th><th>Costo teórico</th></tr></thead>
+            <tbody>${g.filas.map(f => `<tr>
+                <td>${escapar(f.estructura)} <span class="nota">${escapar(f.origen)}</span></td>
+                <td style="width:30%"><div style="height:10px;border-radius:3px;background:${f.origen === 'Propia' ? 'var(--selva)' : 'var(--guayaba)'};width:${Math.max(2, Math.round(100 * f.nanosTotal / maximo))}%"></div></td>
+                <td>${formatearTiempo(f.nanosTotal)}</td><td>${formatearTiempo(f.nanosPorOperacion)}</td>
+                <td>${escapar(f.complejidad)}</td></tr>`).join('')}</tbody>
+        </table>`;
+    }).join('');
+}
+
+document.getElementById('form-rendimiento').addEventListener('submit', async evento => {
+    evento.preventDefault();
+    const boton = document.getElementById('btn-rendimiento');
+    boton.disabled = true;
+    boton.textContent = 'Midiendo...';
+    try {
+        const resultados = await peticion('GET', '/reportes/rendimiento?elementos=' + document.getElementById('select-elementos').value);
+        pintarRendimiento(resultados);
+    } catch (err) {
+        mostrarMensaje(err.message, 'error');
+    } finally {
+        boton.disabled = false;
+        boton.textContent = 'Ejecutar comparación';
+    }
+});
+
 async function iniciar() {
     const usuarios = await peticion('GET', '/usuarios');
     usuarios.forEach(u => { nombres[u.identificacion] = u.nombre; });
-    await Promise.all([cargarRanking(), cargarNiveles(), cargarRedUsuarios(), cargarRedBilleteras(), cargarAnalitica()]);
+    await Promise.all([cargarRanking(), cargarNiveles(), cargarRedUsuarios(), cargarRedBilleteras(), cargarAnalitica(), cargarCiclosYRutas(), cargarMayorValor()]);
 }
 
 iniciar().catch(err => mostrarMensaje(err.message, 'error'));

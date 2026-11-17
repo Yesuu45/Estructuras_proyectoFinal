@@ -164,6 +164,118 @@ public class Grafo<V> {
         return camino;
     }
 
+    // ---------- Ciclos y rutas ----------
+
+    /** Tope de pasos de exploración, para que un grafo muy denso no deje la consulta colgada. */
+    private static final int PRESUPUESTO_PASOS = 500_000;
+
+    /**
+     * Ciclos simples (sin repetir vértices) del grafo dirigido, por búsqueda en profundidad.
+     * Cada ciclo sale una sola vez, empezando por su vértice de menor orden interno.
+     * Se detiene al llegar a 'limite' ciclos. Cada ciclo va sin repetir el vértice inicial al final.
+     */
+    public SimpleLinkedList<SimpleLinkedList<V>> ciclos(int limite) {
+        SimpleLinkedList<SimpleLinkedList<V>> encontrados = new SimpleLinkedList<>();
+        TablaHash<V, Integer> orden = ordenDeVertices();
+        int[] pasos = {0};
+        Cola<V> inicios = vertices();
+        while (!inicios.isEmpty() && encontrados.getSize() < limite && pasos[0] < PRESUPUESTO_PASOS) {
+            V inicio = inicios.desencolar();
+            Stack<V> camino = new Stack<>();
+            TablaHash<V, Boolean> enCamino = new TablaHash<>();
+            camino.push(inicio);
+            enCamino.put(inicio, Boolean.TRUE);
+            buscarCiclos(inicio, inicio, orden, camino, enCamino, encontrados, limite, pasos);
+        }
+        return encontrados;
+    }
+
+    private void buscarCiclos(V inicio, V actual, TablaHash<V, Integer> orden, Stack<V> camino,
+                              TablaHash<V, Boolean> enCamino, SimpleLinkedList<SimpleLinkedList<V>> encontrados,
+                              int limite, int[] pasos) {
+        for (NodeSimple<Arista<V>> nodo = vecinos(actual).getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            if (encontrados.getSize() >= limite || ++pasos[0] > PRESUPUESTO_PASOS) {
+                return;
+            }
+            V siguiente = nodo.getData().getDestino();
+            if (siguiente.equals(inicio)) {
+                encontrados.addLast(copiarCamino(camino));
+            } else if (orden.get(siguiente) > orden.get(inicio) && !enCamino.containsKey(siguiente)) {
+                camino.push(siguiente);
+                enCamino.put(siguiente, Boolean.TRUE);
+                buscarCiclos(inicio, siguiente, orden, camino, enCamino, encontrados, limite, pasos);
+                enCamino.remove(siguiente);
+                camino.pop();
+            }
+        }
+    }
+
+    /**
+     * Caminos simples (sin repetir vértices) con entre 'minSaltos' y 'maxSaltos' aristas.
+     * Sirve para encontrar rutas de dinero de varios pasos. Se detiene al llegar a 'limite' caminos.
+     */
+    public SimpleLinkedList<SimpleLinkedList<V>> caminos(int minSaltos, int maxSaltos, int limite) {
+        if (minSaltos < 1 || maxSaltos < minSaltos) {
+            throw new IllegalArgumentException("El rango de saltos no es válido");
+        }
+        SimpleLinkedList<SimpleLinkedList<V>> encontrados = new SimpleLinkedList<>();
+        int[] pasos = {0};
+        Cola<V> inicios = vertices();
+        while (!inicios.isEmpty() && encontrados.getSize() < limite && pasos[0] < PRESUPUESTO_PASOS) {
+            V inicio = inicios.desencolar();
+            Stack<V> camino = new Stack<>();
+            TablaHash<V, Boolean> enCamino = new TablaHash<>();
+            camino.push(inicio);
+            enCamino.put(inicio, Boolean.TRUE);
+            buscarCaminos(inicio, 0, minSaltos, maxSaltos, camino, enCamino, encontrados, limite, pasos);
+        }
+        return encontrados;
+    }
+
+    private void buscarCaminos(V actual, int saltos, int minSaltos, int maxSaltos, Stack<V> camino,
+                               TablaHash<V, Boolean> enCamino, SimpleLinkedList<SimpleLinkedList<V>> encontrados,
+                               int limite, int[] pasos) {
+        if (saltos >= minSaltos) {
+            encontrados.addLast(copiarCamino(camino));
+        }
+        if (saltos == maxSaltos) {
+            return;
+        }
+        for (NodeSimple<Arista<V>> nodo = vecinos(actual).getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            if (encontrados.getSize() >= limite || ++pasos[0] > PRESUPUESTO_PASOS) {
+                return;
+            }
+            V siguiente = nodo.getData().getDestino();
+            if (!enCamino.containsKey(siguiente)) {
+                camino.push(siguiente);
+                enCamino.put(siguiente, Boolean.TRUE);
+                buscarCaminos(siguiente, saltos + 1, minSaltos, maxSaltos, camino, enCamino, encontrados, limite, pasos);
+                enCamino.remove(siguiente);
+                camino.pop();
+            }
+        }
+    }
+
+    private TablaHash<V, Integer> ordenDeVertices() {
+        TablaHash<V, Integer> orden = new TablaHash<>();
+        Cola<V> claves = vertices();
+        int indice = 0;
+        while (!claves.isEmpty()) {
+            orden.put(claves.desencolar(), indice++);
+        }
+        return orden;
+    }
+
+    /** El camino sale de la pila de arriba hacia abajo; se invierte para dejarlo en orden de recorrido. */
+    private SimpleLinkedList<V> copiarCamino(Stack<V> camino) {
+        Stack<V> copia = camino.clonStack();
+        SimpleLinkedList<V> lista = new SimpleLinkedList<>();
+        while (!copia.isEmpty()) {
+            lista.addFirst(copia.pop());
+        }
+        return lista;
+    }
+
     private static void validar(Object valor, String nombre) {
         if (valor == null) {
             throw new IllegalArgumentException(nombre + " no puede ser nulo");

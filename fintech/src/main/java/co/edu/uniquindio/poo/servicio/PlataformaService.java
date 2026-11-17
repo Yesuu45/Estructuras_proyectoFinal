@@ -918,6 +918,156 @@ public class PlataformaService {
         return resultado;
     }
 
+    // ---------- Requisitos adicionales (solo administrador) ----------
+
+    /**
+     * Usuarios con más actividad entre dos fechas: cuenta las transacciones registradas en las que participan
+     * (como titular de la billetera origen o destino, una vez por transacción; las revertidas también cuentan).
+     * El primero del resultado es el más activo.
+     */
+    public Conteo[] usuariosMasActivos(String actor, LocalDateTime desde, LocalDateTime hasta, int n) {
+        exigirAdmin(actor, "Solo el administrador puede ver la actividad de los usuarios");
+        if (desde == null || hasta == null || desde.isAfter(hasta)) {
+            throw new IllegalArgumentException("El rango de fechas no es válido");
+        }
+        TablaHash<String, Integer> cuentas = new TablaHash<>();
+        for (NodeSimple<Transaccion> nodo = libro.getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            Transaccion t = nodo.getData();
+            if (t.getFecha().isBefore(desde) || t.getFecha().isAfter(hasta)) {
+                continue;
+            }
+            String titularOrigen = t.getCodigoOrigen() == null ? null
+                    : buscarBilletera(t.getCodigoOrigen()).getIdentificacionTitular();
+            String titularDestino = t.getCodigoDestino() == null ? null
+                    : buscarBilletera(t.getCodigoDestino()).getIdentificacionTitular();
+            contar(cuentas, titularOrigen);
+            if (titularDestino != null && !titularDestino.equals(titularOrigen)) {
+                contar(cuentas, titularDestino);
+            }
+        }
+        return primeros(aConteos(cuentas), n);
+    }
+
+    private static void contar(TablaHash<String, Integer> cuentas, String clave) {
+        if (clave != null) {
+            cuentas.put(clave, (cuentas.containsKey(clave) ? cuentas.get(clave) : 0) + 1);
+        }
+    }
+
+    private static final int MAX_CICLOS = 100;
+    private static final int MAX_RUTAS = 5000;
+
+    /** Ciclos de dinero (A -> B -> ... -> A) en la red de 'usuarios' o de 'billeteras'. */
+    public RutaFrecuente[] ciclosDeTransferencias(String actor, String red) {
+        exigirAdmin(actor, "Solo el administrador puede analizar la red de transferencias");
+        Grafo<String> grafo = elegirRed(red);
+        SimpleLinkedList<SimpleLinkedList<String>> ciclos = grafo.ciclos(MAX_CICLOS);
+        RutaFrecuente[] resultado = new RutaFrecuente[ciclos.getSize()];
+        int i = 0;
+        for (NodeSimple<SimpleLinkedList<String>> nodo = ciclos.getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            resultado[i++] = describirRecorrido(grafo, nodo.getData(), true);
+        }
+        return ordenarRutas(resultado);
+    }
+
+    /**
+     * Rutas de 2 y 3 saltos por las que más veces ha circulado dinero, ordenadas por la arista menos usada
+     * de la ruta (cuántas veces se ha podido completar) y luego por el dinero acumulado.
+     */
+    public RutaFrecuente[] rutasFrecuentes(String actor, String red, int n) {
+        exigirAdmin(actor, "Solo el administrador puede analizar la red de transferencias");
+        if (n < 1) {
+            throw new IllegalArgumentException("La cantidad a mostrar debe ser al menos 1");
+        }
+        Grafo<String> grafo = elegirRed(red);
+        SimpleLinkedList<SimpleLinkedList<String>> caminos = grafo.caminos(2, 3, MAX_RUTAS);
+        RutaFrecuente[] todas = new RutaFrecuente[caminos.getSize()];
+        int i = 0;
+        for (NodeSimple<SimpleLinkedList<String>> nodo = caminos.getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            todas[i++] = describirRecorrido(grafo, nodo.getData(), false);
+        }
+        ordenarRutas(todas);
+        int limite = Math.min(n, todas.length);
+        RutaFrecuente[] resultado = new RutaFrecuente[limite];
+        for (int k = 0; k < limite; k++) {
+            resultado[k] = todas[k];
+        }
+        return resultado;
+    }
+
+    private Grafo<String> elegirRed(String red) {
+        if ("usuarios".equals(red)) {
+            return redUsuarios;
+        }
+        if ("billeteras".equals(red)) {
+            return redBilleteras;
+        }
+        throw new IllegalArgumentException("La red debe ser 'usuarios' o 'billeteras'");
+    }
+
+    private static RutaFrecuente describirRecorrido(Grafo<String> grafo, SimpleLinkedList<String> vertices, boolean cerrado) {
+        String[] pasos = vertices.toArray(new String[0]);
+        int frecuencia = Integer.MAX_VALUE;
+        BigDecimal total = BigDecimal.ZERO;
+        int aristas = cerrado ? pasos.length : pasos.length - 1;
+        for (int i = 0; i < aristas; i++) {
+            Arista<String> arista = grafo.getArista(pasos[i], pasos[(i + 1) % pasos.length]);
+            frecuencia = Math.min(frecuencia, arista.getCantidad());
+            total = total.add(arista.getTotal());
+        }
+        return new RutaFrecuente(pasos, frecuencia == Integer.MAX_VALUE ? 0 : frecuencia, total);
+    }
+
+    /** Orden: más frecuente, más dinero y, para que sea estable, por el texto del recorrido. */
+    private static RutaFrecuente[] ordenarRutas(RutaFrecuente[] rutas) {
+        for (int i = 1; i < rutas.length; i++) {
+            RutaFrecuente actual = rutas[i];
+            int j = i - 1;
+            while (j >= 0 && antes(actual, rutas[j])) {
+                rutas[j + 1] = rutas[j];
+                j--;
+            }
+            rutas[j + 1] = actual;
+        }
+        return rutas;
+    }
+
+    private static boolean antes(RutaFrecuente a, RutaFrecuente b) {
+        if (a.frecuencia() != b.frecuencia()) {
+            return a.frecuencia() > b.frecuencia();
+        }
+        int porDinero = a.total().compareTo(b.total());
+        if (porDinero != 0) {
+            return porDinero > 0;
+        }
+        return String.join(">", a.vertices()).compareTo(String.join(">", b.vertices())) < 0;
+    }
+
+    /** Las n transacciones completadas de mayor valor, sacadas de un montículo (cola de prioridad). */
+    public Transaccion[] transaccionesMayorValor(String actor, int n) {
+        exigirAdmin(actor, "Solo el administrador puede ver las transacciones de mayor valor");
+        if (n < 1) {
+            throw new IllegalArgumentException("La cantidad a mostrar debe ser al menos 1");
+        }
+        MonticuloBinario<TransaccionPorValor> monticulo = new MonticuloBinario<>();
+        for (NodeSimple<Transaccion> nodo = libro.getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            if (nodo.getData().getEstado() == EstadoTransaccion.COMPLETADA) {
+                monticulo.insertar(new TransaccionPorValor(nodo.getData()));
+            }
+        }
+        Transaccion[] resultado = new Transaccion[Math.min(n, monticulo.size())];
+        for (int i = 0; i < resultado.length; i++) {
+            resultado[i] = monticulo.extraerMinimo().transaccion();
+        }
+        return resultado;
+    }
+
+    /** Compara estructuras propias y de Java en operaciones parecidas (ver ComparadorRendimiento). */
+    public ResultadoRendimiento[] compararRendimiento(String actor, int elementos) {
+        exigirAdmin(actor, "Solo el administrador puede ejecutar la comparación de rendimiento");
+        return ComparadorRendimiento.comparar(elementos);
+    }
+
     // ---------- Pila: deshacer operaciones ----------
 
     /**

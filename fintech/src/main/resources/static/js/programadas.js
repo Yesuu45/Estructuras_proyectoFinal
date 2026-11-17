@@ -14,6 +14,7 @@ async function cargarProgramadas() {
          <td>${escapar(p.valor)}</td><td>${escapar(p.codigoOrigen ?? '—')}</td>
          <td>${escapar(p.codigoDestino)}</td><td>${escapar(repeticion)}</td><td>${escapar(p.estado)}</td></tr>`;
     }));
+    return programadas;
 }
 
 async function cargarReloj() {
@@ -60,6 +61,57 @@ async function avanzar(minutos) {
     }
 }
 
+// Simulación automática: cada cierto tiempo real mueve el reloj y deja registro de lo que ocurrió
+let temporizador = null;
+
+function registrarSimulacion(texto) {
+    const registro = document.getElementById('sim-registro');
+    const linea = document.createElement('li');
+    linea.textContent = texto;
+    registro.prepend(linea);
+    while (registro.children.length > 15) {
+        registro.lastChild.remove();
+    }
+}
+
+function detenerSimulacion(motivo) {
+    if (temporizador === null) {
+        return;
+    }
+    clearInterval(temporizador);
+    temporizador = null;
+    document.getElementById('sim-iniciar').hidden = false;
+    document.getElementById('sim-detener').hidden = true;
+    registrarSimulacion('Simulación detenida' + (motivo ? ': ' + motivo : ''));
+}
+
+async function pasoDeSimulacion() {
+    try {
+        const minutos = Number(document.getElementById('sim-paso').value);
+        const r = await peticion('POST', '/reloj/avanzar', { minutos, ejecutar: true });
+        registrarSimulacion(`${formatearFecha(r.ahora)} · ejecutadas ${r.ejecutadas} · avisos ${r.avisadas}`);
+        const [, programadas] = await Promise.all([cargarReloj(), cargarProgramadas()]);
+        if (!programadas.some(p => p.estado === 'PENDIENTE')) {
+            detenerSimulacion('no quedan operaciones pendientes');
+        }
+    } catch (err) {
+        detenerSimulacion(err.message);
+    }
+}
+
+function iniciarSimulacion() {
+    if (temporizador !== null) {
+        return;
+    }
+    const intervalo = Number(document.getElementById('sim-intervalo').value);
+    document.getElementById('sim-iniciar').hidden = true;
+    document.getElementById('sim-detener').hidden = false;
+    registrarSimulacion('Simulación iniciada');
+    temporizador = setInterval(pasoDeSimulacion, intervalo);
+}
+
+window.addEventListener('pagehide', () => detenerSimulacion());
+
 async function prepararAdministrador() {
     const yo = await sesionActual;
     if (!yo || yo.rol !== 'ADMIN') {
@@ -69,6 +121,8 @@ async function prepararAdministrador() {
     document.getElementById('btn-ejecutar').hidden = false;
     document.querySelectorAll('[data-minutos]').forEach(boton =>
         boton.addEventListener('click', () => avanzar(Number(boton.dataset.minutos))));
+    document.getElementById('sim-iniciar').addEventListener('click', iniciarSimulacion);
+    document.getElementById('sim-detener').addEventListener('click', () => detenerSimulacion());
     document.getElementById('reloj-restablecer').addEventListener('click', async () => {
         try {
             await peticion('POST', '/reloj/restablecer');

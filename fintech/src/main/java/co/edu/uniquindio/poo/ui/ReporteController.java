@@ -1,5 +1,6 @@
 package co.edu.uniquindio.poo.ui;
 
+import co.edu.uniquindio.poo.modelo.Transaccion;
 import co.edu.uniquindio.poo.modelo.Usuario;
 import co.edu.uniquindio.poo.servicio.*;
 import jakarta.servlet.http.HttpSession;
@@ -98,6 +99,37 @@ public class ReporteController {
         } catch (DateTimeParseException e) {
             throw new IllegalArgumentException("Fecha no válida: " + texto);
         }
+    }
+
+    // ---------- Requisitos adicionales (sección 8) ----------
+
+    /** Usuarios con más actividad entre dos fechas; el primero es el más activo. */
+    @GetMapping("/actividad")
+    public Conteo[] actividad(@RequestParam String desde, @RequestParam String hasta,
+                              @RequestParam(defaultValue = "5") int n, HttpSession sesion) {
+        return servicio.usuariosMasActivos(SesionActual.identificacion(sesion),
+                leerFecha(desde, false), leerFecha(hasta, true), n);
+    }
+
+    @GetMapping("/ciclos")
+    public RutaFrecuente[] ciclos(@RequestParam(defaultValue = "usuarios") String red, HttpSession sesion) {
+        return servicio.ciclosDeTransferencias(SesionActual.identificacion(sesion), red);
+    }
+
+    @GetMapping("/rutas-frecuentes")
+    public RutaFrecuente[] rutasFrecuentes(@RequestParam(defaultValue = "usuarios") String red,
+                                           @RequestParam(defaultValue = "5") int n, HttpSession sesion) {
+        return servicio.rutasFrecuentes(SesionActual.identificacion(sesion), red, n);
+    }
+
+    @GetMapping("/mayor-valor")
+    public Transaccion[] mayorValor(@RequestParam(defaultValue = "5") int n, HttpSession sesion) {
+        return servicio.transaccionesMayorValor(SesionActual.identificacion(sesion), n);
+    }
+
+    @GetMapping("/rendimiento")
+    public ResultadoRendimiento[] rendimiento(@RequestParam(defaultValue = "5000") int elementos, HttpSession sesion) {
+        return servicio.compararRendimiento(SesionActual.identificacion(sesion), elementos);
     }
 
     // ---------- Ventajas por nivel (4.5) ----------

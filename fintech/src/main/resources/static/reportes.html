@@ -131,6 +131,72 @@
         </form>
         <p id="resultado-monto" class="nota"></p>
     </section>
+
+    <section class="seccion">
+        <h2>Usuario con mayor actividad en un período</h2>
+        <p class="nota">Cuenta las transacciones registradas en las que participa cada usuario (como quien envía o quien recibe). El primero de la lista es el más activo.</p>
+        <form id="form-actividad" class="formulario">
+            <input name="desde" type="date" required>
+            <input name="hasta" type="date" required>
+            <button type="submit">Buscar</button>
+        </form>
+        <p id="resultado-actividad" class="nota"></p>
+        <table id="tabla-actividad-contenedor" hidden>
+            <thead><tr><th>#</th><th>Usuario</th><th>Transacciones</th></tr></thead>
+            <tbody id="tabla-actividad"></tbody>
+        </table>
+    </section>
+
+    <section class="seccion">
+        <h2>Ciclos y rutas frecuentes en la red de transferencias</h2>
+        <p class="nota">Un ciclo es dinero que sale de un usuario y regresa a él pasando por otros. Una ruta frecuente es un recorrido de 2 o 3 saltos; su frecuencia es la de la arista menos usada.</p>
+        <div class="formulario">
+            <select id="select-red">
+                <option value="usuarios">Red de usuarios</option>
+                <option value="billeteras">Red de billeteras</option>
+            </select>
+        </div>
+        <h3>Ciclos</h3>
+        <table>
+            <thead><tr><th>Ciclo</th><th>Veces (mínimo)</th><th>Dinero en el ciclo</th></tr></thead>
+            <tbody id="tabla-ciclos"></tbody>
+        </table>
+        <h3>Rutas más frecuentes</h3>
+        <table>
+            <thead><tr><th>#</th><th>Ruta</th><th>Veces (mínimo)</th><th>Dinero acumulado</th></tr></thead>
+            <tbody id="tabla-rutas"></tbody>
+        </table>
+    </section>
+
+    <section class="seccion">
+        <h2>Transacciones de mayor valor</h2>
+        <p class="nota">Salen de un montículo binario (cola de prioridad) con las transacciones completadas; las revertidas no cuentan.</p>
+        <div class="formulario">
+            <select id="select-mayor-valor">
+                <option value="5">Las 5 mayores</option>
+                <option value="10">Las 10 mayores</option>
+                <option value="20">Las 20 mayores</option>
+            </select>
+        </div>
+        <table>
+            <thead><tr><th>#</th><th>Id</th><th>Fecha</th><th>Tipo</th><th>Valor</th><th>Origen</th><th>Destino</th></tr></thead>
+            <tbody id="tabla-mayor-valor"></tbody>
+        </table>
+    </section>
+
+    <section class="seccion">
+        <h2>Comparación de rendimiento de estructuras</h2>
+        <p class="nota">Mide las estructuras propias del proyecto contra las de Java en operaciones parecidas, con claves enteras en orden aleatorio. Los tiempos dependen de la máquina; lo que importa es cómo crece cada estructura.</p>
+        <form id="form-rendimiento" class="formulario">
+            <select name="elementos" id="select-elementos">
+                <option value="1000">1.000 elementos</option>
+                <option value="5000" selected>5.000 elementos</option>
+                <option value="20000">20.000 elementos</option>
+            </select>
+            <button type="submit" id="btn-rendimiento">Ejecutar comparación</button>
+        </form>
+        <div id="resultado-rendimiento"></div>
+    </section>
 </main>
 <script src="js/comun.js"></script>
 <script src="js/reportes.js"></script>
