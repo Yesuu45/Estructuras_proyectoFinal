@@ -1,5 +1,4 @@
--- Esquema de la plataforma fintech. Es idempotente: Spring lo ejecuta en cada arranque
--- (spring.sql.init.mode=always), por eso todo usa IF NOT EXISTS.
+
 
 CREATE TABLE IF NOT EXISTS usuarios (
                                         identificacion  VARCHAR(30)  PRIMARY KEY,
@@ -12,7 +11,6 @@ CREATE TABLE IF NOT EXISTS usuarios (
     fecha_registro  TIMESTAMP    NOT NULL DEFAULT NOW()
     );
 
--- Por si la tabla ya existía de antes sin la columna de la contraseña
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS clave_hash VARCHAR(128);
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol VARCHAR(20) NOT NULL DEFAULT 'USUARIO';
 
