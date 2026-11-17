@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes | Plataforma Fintech</title>
+    <link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+<header>
+    <h1>Plataforma Fintech de Billeteras Digitales</h1>
+</header>
+<nav>
+    <a href="index.html">Inicio</a>
+    <a href="usuarios.html">Usuarios</a>
+    <a href="billeteras.html">Billeteras</a>
+    <a href="transacciones.html">Transacciones</a>
+    <a href="programadas.html">Programadas</a>
+    <a href="beneficios.html">Beneficios</a>
+    <a href="auditoria.html">Auditoría</a>
+</nav>
+<main>
+    <div id="mensajes" class="mensaje" hidden></div>
+
+    <section class="seccion">
+        <h2>Ranking de usuarios por puntos</h2>
+        <p class="nota">Los usuarios viven en un árbol binario de búsqueda ordenado por puntos; el ranking es su recorrido inorden de mayor a menor.</p>
+        <table>
+            <thead>
+            <tr><th>#</th><th>Identificación</th><th>Nombre</th><th>Puntos</th><th>Nivel</th></tr>
+            </thead>
+            <tbody id="tabla-ranking"></tbody>
+        </table>
+    </section>
+
+    <section class="seccion">
+        <h2>Usuarios por nivel</h2>
+        <table>
+            <thead>
+            <tr><th>Nivel</th><th>Puntos</th><th>Usuarios</th></tr>
+            </thead>
+            <tbody id="tabla-niveles"></tbody>
+        </table>
+    </section>
+
+    <section class="seccion">
+        <h2>Buscar usuarios por rango de puntos</h2>
+        <p class="nota">La búsqueda recorre solo las ramas del árbol que pueden tener puntos dentro del rango.</p>
+        <form id="form-rango" class="formulario">
+            <input name="minimo" type="number" min="0" step="1" placeholder="Puntos desde" required>
+            <input name="maximo" type="number" min="0" step="1" placeholder="Puntos hasta" required>
+            <button type="submit">Buscar</button>
+        </form>
+        <table id="resultado-rango" hidden>
+            <thead>
+            <tr><th>Identificación</th><th>Nombre</th><th>Puntos</th><th>Nivel</th></tr>
+            </thead>
+            <tbody id="tabla-rango"></tbody>
+        </table>
+    </section>
+
+    <section class="seccion">
+        <h2>Red de transferencias entre usuarios</h2>
+        <p class="nota">Grafo dirigido: cada flecha va de quien envía a quien recibe y el número indica cuántas veces. Las transferencias revertidas no cuentan.</p>
+        <div id="dibujo-red"></div>
+        <table>
+            <thead>
+            <tr><th>Origen</th><th>Destino</th><th>Veces</th><th>Total</th></tr>
+            </thead>
+            <tbody id="tabla-red-usuarios"></tbody>
+        </table>
+
+        <h3>¿Ha circulado dinero de un usuario a otro?</h3>
+        <form id="form-ruta" class="formulario">
+            <select name="desde" id="ruta-desde" required></select>
+            <select name="hasta" id="ruta-hasta" required></select>
+            <button type="submit">Buscar ruta</button>
+        </form>
+        <p id="resultado-ruta" class="nota"></p>
+    </section>
+
+    <section class="seccion">
+        <h2>Red de transferencias entre billeteras</h2>
+        <table>
+            <thead>
+            <tr><th>Billetera origen</th><th>Billetera destino</th><th>Veces</th><th>Total</th></tr>
+            </thead>
+            <tbody id="tabla-red-billeteras"></tbody>
+        </table>
+    </section>
+</main>
+<script src="js/comun.js"></script>
+<script src="js/reportes.js"></script>
+</body>
+</html>

@@ -43,7 +43,31 @@ async function cargarBilleteras() {
             <td>${escapar(b.identificacionTitular)}</td>
             <td>${escapar(b.saldo)}</td>
             <td>${b.activa ? 'Activa' : 'Bloqueada'}</td>
+            <td><button onclick="verHistorial('${escapar(b.codigo)}')">Historial</button></td>
         </tr>`).join('');
+}
+
+// Historial de una billetera (lista enlazada en el servidor, en orden de llegada)
+async function verHistorial(codigo) {
+    try {
+        const movimientos = await llamar('GET', `/billeteras/${encodeURIComponent(codigo)}/historial`);
+        document.getElementById('titulo-historial').textContent = 'Historial de ' + codigo;
+        document.querySelector('#tabla-historial tbody').innerHTML = movimientos.length === 0
+            ? '<tr><td colspan="7">Esta billetera aún no tiene movimientos</td></tr>'
+            : movimientos.map(t => `
+            <tr>
+                <td>${escapar(t.id)}</td>
+                <td>${escapar(t.fecha)}</td>
+                <td>${escapar(t.tipo)}</td>
+                <td>${escapar(t.valor)}</td>
+                <td>${escapar(t.codigoOrigen ?? '—')}</td>
+                <td>${escapar(t.codigoDestino ?? '—')}</td>
+                <td>${escapar(t.estado)}</td>
+            </tr>`).join('');
+        document.getElementById('seccion-historial').hidden = false;
+    } catch (error) {
+        mostrar(error.message, true);
+    }
 }
 
 formulario.addEventListener('submit', async (evento) => {

@@ -182,13 +182,16 @@ public class ArbolBinario<T extends Comparable<T>>{
         } else {                                      // encontré el nodo a eliminar
             // Caso 1: hoja
             if (nodo.getIzquierdo() == null && nodo.getDerecho() == null) {
+                peso--;
                 return null;
             }
             // Caso 2: un solo hijo
             if (nodo.getIzquierdo() == null) {
+                peso--;
                 return nodo.getDerecho();
             }
             if (nodo.getDerecho() == null) {
+                peso--;
                 return nodo.getIzquierdo();
             }
             // Caso 3: dos hijos
@@ -208,6 +211,63 @@ public class ArbolBinario<T extends Comparable<T>>{
         return nodo;
     }
 
+
+    // ---------- Consultas que devuelven una lista (para reportes) ----------
+
+    /** Todos los elementos de menor a mayor (recorrido inorden). */
+    public SimpleLinkedList<T> inorden() {
+        SimpleLinkedList<T> lista = new SimpleLinkedList<>();
+        inorden(raiz, lista);
+        return lista;
+    }
+
+    private void inorden(NodeArbol<T> nodo, SimpleLinkedList<T> lista) {
+        if (nodo == null) return;
+        inorden(nodo.getIzquierdo(), lista);
+        lista.addLast(nodo.getElemento());
+        inorden(nodo.getDerecho(), lista);
+    }
+
+    /** Todos los elementos de mayor a menor (inorden invertido: derecho, raíz, izquierdo). */
+    public SimpleLinkedList<T> inordenDescendente() {
+        SimpleLinkedList<T> lista = new SimpleLinkedList<>();
+        inordenDescendente(raiz, lista);
+        return lista;
+    }
+
+    private void inordenDescendente(NodeArbol<T> nodo, SimpleLinkedList<T> lista) {
+        if (nodo == null) return;
+        inordenDescendente(nodo.getDerecho(), lista);
+        lista.addLast(nodo.getElemento());
+        inordenDescendente(nodo.getIzquierdo(), lista);
+    }
+
+    /**
+     * Elementos entre inferior y superior (ambos incluidos), de menor a mayor.
+     * Poda: solo baja por una rama si ahí puede haber elementos del rango, así que no recorre todo el árbol.
+     */
+    public SimpleLinkedList<T> enRango(T inferior, T superior) {
+        SimpleLinkedList<T> lista = new SimpleLinkedList<>();
+        if (inferior.compareTo(superior) <= 0) {
+            enRango(raiz, inferior, superior, lista);
+        }
+        return lista;
+    }
+
+    private void enRango(NodeArbol<T> nodo, T inferior, T superior, SimpleLinkedList<T> lista) {
+        if (nodo == null) return;
+        int conInferior = nodo.getElemento().compareTo(inferior);
+        int conSuperior = nodo.getElemento().compareTo(superior);
+        if (conInferior > 0) {
+            enRango(nodo.getIzquierdo(), inferior, superior, lista);   // a la izquierda aún puede haber valores en el rango
+        }
+        if (conInferior >= 0 && conSuperior <= 0) {
+            lista.addLast(nodo.getElemento());
+        }
+        if (conSuperior < 0) {
+            enRango(nodo.getDerecho(), inferior, superior, lista);     // a la derecha aún puede haber valores en el rango
+        }
+    }
 
     public NodeArbol<T> obtenerMenor(){
         return obtenerMenor(raiz);

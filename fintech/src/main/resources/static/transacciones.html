@@ -56,6 +56,19 @@
             <button type="submit">Registrar</button>
         </form>
 
+        <form id="form-periodo" class="formulario">
+            <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 200px;font-size:.9rem;color:var(--tinta-suave)">
+                Desde
+                <input type="datetime-local" id="filtro-desde">
+            </label>
+            <label style="display:flex;flex-direction:column;gap:4px;flex:1 1 200px;font-size:.9rem;color:var(--tinta-suave)">
+                Hasta
+                <input type="datetime-local" id="filtro-hasta">
+            </label>
+            <button type="submit">Filtrar por período</button>
+            <button type="button" id="quitar-filtro" class="secundario">Quitar filtro</button>
+        </form>
+
         <table id="tabla-transacciones">
             <thead>
             <tr>
@@ -69,6 +82,28 @@
                 <th>Puntos</th>
                 <th></th>
             </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </section>
+
+    <section class="seccion">
+        <h2>Deshacer operaciones</h2>
+        <p class="nota">Tus operaciones se apilan en el orden en que las haces. "Deshacer" revierte la de arriba (la más reciente) y la pasa al historial de deshacer.</p>
+        <button type="button" id="btn-deshacer">Deshacer la última operación</button>
+
+        <h3>Pila de operaciones reversibles</h3>
+        <table id="tabla-reversibles">
+            <thead>
+            <tr><th></th><th>Id</th><th>Tipo</th><th>Valor</th><th>Origen</th><th>Destino</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <h3>Historial de deshacer</h3>
+        <table id="tabla-deshechas">
+            <thead>
+            <tr><th></th><th>Id</th><th>Tipo</th><th>Valor</th><th>Origen</th><th>Destino</th></tr>
             </thead>
             <tbody></tbody>
         </table>

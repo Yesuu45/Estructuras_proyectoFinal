@@ -82,6 +82,10 @@ public class DatosIniciales implements CommandLineRunner {
 
         // Valentina: usuaria nueva, sin movimientos propios (solo recibió una transferencia)
 
+        // Más transferencias entre usuarios: forman el ciclo Laura -> Daniela -> Carlos -> Laura en el grafo
+        servicio.transferir("DAN-DG", "CAR-CO", valor(5_000));   // Daniela sube a 850 pts (sigue en PLATA)
+        servicio.transferir("CAR-CO", "LAU-DG", valor(2_000));   // Carlos sube a 2.160 pts (sigue en ORO)
+
         // ---- Canjes ----
         servicio.canjear("1001", "C1");   // Laura: cupón de recargas (1.500 pts)
         servicio.canjear("1002", "D5");   // Carlos: descuento del 5% (500 pts)

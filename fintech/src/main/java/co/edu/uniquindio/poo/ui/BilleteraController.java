@@ -1,6 +1,7 @@
 package co.edu.uniquindio.poo.ui;
 
 import co.edu.uniquindio.poo.modelo.Billetera;
+import co.edu.uniquindio.poo.modelo.Transaccion;
 import co.edu.uniquindio.poo.servicio.PlataformaService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,11 @@ public class BilleteraController {
     @GetMapping
     public Billetera[] listar(HttpSession sesion) {
         return servicio.listarBilleteras(SesionActual.identificacion(sesion));
+    }
+
+    @GetMapping("/{codigo}/historial")
+    public Transaccion[] historial(@PathVariable String codigo, HttpSession sesion) {
+        return servicio.historialBilletera(SesionActual.identificacion(sesion), codigo);
     }
 
     @PostMapping

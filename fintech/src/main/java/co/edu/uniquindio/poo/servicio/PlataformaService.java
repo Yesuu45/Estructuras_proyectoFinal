@@ -1,8 +1,6 @@
 package co.edu.uniquindio.poo.servicio;
 
-import co.edu.uniquindio.poo.Estructuras.Cola;
-import co.edu.uniquindio.poo.Estructuras.MonticuloBinario;
-import co.edu.uniquindio.poo.Estructuras.TablaHash;
+import co.edu.uniquindio.poo.Estructuras.*;
 import co.edu.uniquindio.poo.modelo.*;
 import co.edu.uniquindio.poo.seguridad.AccesoDenegadoException;
 import co.edu.uniquindio.poo.seguridad.ClaveSegura;
@@ -27,7 +25,14 @@ public class PlataformaService {
     private final TablaHash<String, OperacionProgramada> programadas = new TablaHash<>();
     private final MonticuloBinario<OperacionProgramada> pendientes = new MonticuloBinario<>();
     private final TablaHash<String, BeneficioDisponible> catalogo = cargarCatalogo();
-    private final Cola<Beneficio> beneficios = new Cola<>();
+    // Listas enlazadas: libro cronológico de todas las transacciones y de todos los canjes
+    private final SimpleLinkedList<Transaccion> libro = new SimpleLinkedList<>();
+    private final SimpleLinkedList<Beneficio> beneficios = new SimpleLinkedList<>();
+    // Árbol binario de búsqueda con los usuarios ordenados por puntos (ranking y búsquedas por rango)
+    private final ArbolBinario<ClavePuntos> ranking = new ArbolBinario<>();
+    // Grafos dirigidos de transferencias: entre usuarios y entre billeteras
+    private final Grafo<String> redUsuarios = new Grafo<>();
+    private final Grafo<String> redBilleteras = new Grafo<>();
     private final Cola<EventoAuditoria> eventos = new Cola<>();
     private final Cola<Notificacion> notificaciones = new Cola<>();
     private int secuencia = 0;
@@ -40,6 +45,8 @@ public class PlataformaService {
         }
         Usuario usuario = new Usuario(identificacion, nombre, correo, ClaveSegura.generarHash(clave));
         usuarios.put(usuario.getIdentificacion(), usuario);
+        ranking.insertar(clave(usuario));
+        redUsuarios.agregarVertice(usuario.getIdentificacion());
         return usuario;
     }
 
@@ -97,6 +104,7 @@ public class PlataformaService {
         Billetera billetera = new Billetera(codigoFinal, nombre, tipo, identificacionTitular,
                 saldoInicial, umbralSaldoBajo);
         billeteras.put(codigoFinal, billetera);
+        redBilleteras.agregarVertice(codigoFinal);
         titular.agregarBilletera(billetera);
         return billetera;
     }
@@ -210,8 +218,13 @@ public class PlataformaService {
         if (origen != null) {
             origen.recargar(transaccion.getValor());
         }
-        usuarioTitular.restarPuntos(transaccion.getPuntosGenerados());
+        cambiarPuntos(usuarioTitular, () -> usuarioTitular.restarPuntos(transaccion.getPuntosGenerados()));
         transaccion.marcarRevertida();
+        if (origen != null && destino != null) {
+            quitarDeLaRed(origen, destino, transaccion.getValor());
+        }
+        usuarioTitular.pilaReversibles().eliminar(transaccion);   // sale de la pila de reversibles (esté donde esté)...
+        usuarioTitular.pilaDeshechas().push(transaccion);        // ...y queda arriba del historial de deshacer
         registrarEvento(titular, "REVERSION", NivelRiesgo.MEDIO, "Transacción " + id + " revertida");
         return transaccion;
     }
@@ -224,23 +237,34 @@ public class PlataformaService {
         return transaccion;
     }
 
-    /** Un usuario normal ve las transacciones donde una de sus billeteras es origen o destino. */
     public Transaccion[] listarTransacciones(String actor) {
-        boolean admin = esAdmin(actor);
-        Cola<String> claves = transacciones.claves();
-        Cola<Transaccion> visibles = new Cola<>();
-        while (!claves.isEmpty()) {
-            Transaccion transaccion = transacciones.get(claves.desencolar());
-            if (admin || esBilleteraDe(actor, transaccion.getCodigoOrigen())
-                    || esBilleteraDe(actor, transaccion.getCodigoDestino())) {
-                visibles.encolar(transaccion);
+        return listarTransacciones(actor, null, null);
+    }
+
+    /**
+     * Movimientos en orden cronológico, opcionalmente dentro de un período (desde y hasta incluidos; null = sin límite).
+     * El administrador recorre el libro completo; un usuario normal, solo su propio historial.
+     */
+    public Transaccion[] listarTransacciones(String actor, LocalDateTime desde, LocalDateTime hasta) {
+        if (desde != null && hasta != null && desde.isAfter(hasta)) {
+            throw new IllegalArgumentException("La fecha inicial no puede ser posterior a la final");
+        }
+        SimpleLinkedList<Transaccion> fuente = esAdmin(actor) ? libro : buscarUsuario(actor).historialMovimientos();
+        SimpleLinkedList<Transaccion> enPeriodo = new SimpleLinkedList<>();
+        for (NodeSimple<Transaccion> nodo = fuente.getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            LocalDateTime fecha = nodo.getData().getFecha();
+            if ((desde == null || !fecha.isBefore(desde)) && (hasta == null || !fecha.isAfter(hasta))) {
+                enPeriodo.addLast(nodo.getData());
             }
         }
-        Transaccion[] resultado = new Transaccion[visibles.getSize()];
-        for (int i = 0; i < resultado.length; i++) {
-            resultado[i] = visibles.desencolar();
-        }
-        return resultado;
+        return enPeriodo.toArray(new Transaccion[0]);
+    }
+
+    /** Historial de una billetera. Solo su titular o el administrador. */
+    public Transaccion[] historialBilletera(String actor, String codigo) {
+        Billetera billetera = buscarBilletera(codigo);
+        exigirPropietario(actor, billetera.getIdentificacionTitular(), "Esa billetera no es tuya");
+        return billetera.historialMovimientos().toArray(new Transaccion[0]);
     }
 
     // ---------- Operaciones programadas ----------
@@ -313,10 +337,11 @@ public class PlataformaService {
             throw new IllegalStateException("Puntos insuficientes: tienes " + usuario.getPuntos()
                     + " y el beneficio cuesta " + oferta.getPuntosCosto());
         }
-        usuario.restarPuntos(oferta.getPuntosCosto());
+        cambiarPuntos(usuario, () -> usuario.restarPuntos(oferta.getPuntosCosto()));
         Beneficio beneficio = new Beneficio(identificacion, oferta.getNombre(),
                 oferta.getPuntosCosto(), LocalDateTime.now());
-        beneficios.encolar(beneficio);
+        beneficios.addLast(beneficio);
+        usuario.registrarCanje(beneficio);
         registrarEvento(identificacion, "CANJE_BENEFICIO", NivelRiesgo.BAJO,
                 oferta.getNombre() + " (" + oferta.getPuntosCosto() + " pts)");
         return beneficio;
@@ -359,21 +384,10 @@ public class PlataformaService {
         return codigo;
     }
 
+    /** El administrador ve todos los canjes; un usuario normal, los suyos. */
     public Beneficio[] listarBeneficios(String actor) {
-        boolean admin = esAdmin(actor);
-        Cola<Beneficio> copia = beneficios.clonarCola();
-        Cola<Beneficio> visibles = new Cola<>();
-        while (!copia.isEmpty()) {
-            Beneficio beneficio = copia.desencolar();
-            if (admin || beneficio.getIdentificacionUsuario().equals(actor)) {
-                visibles.encolar(beneficio);
-            }
-        }
-        Beneficio[] resultado = new Beneficio[visibles.getSize()];
-        for (int i = 0; i < resultado.length; i++) {
-            resultado[i] = visibles.desencolar();
-        }
-        return resultado;
+        SimpleLinkedList<Beneficio> fuente = esAdmin(actor) ? beneficios : buscarUsuario(actor).canjesRealizados();
+        return fuente.toArray(new Beneficio[0]);
     }
 
     // ---------- Auditoría y notificaciones ----------
@@ -404,6 +418,156 @@ public class PlataformaService {
             resultado[i] = visibles.desencolar();
         }
         return resultado;
+    }
+
+    // ---------- Pila: deshacer operaciones ----------
+
+    /**
+     * Revierte la operación más reciente que aún se pueda deshacer (el tope de la pila del usuario).
+     * Si no se puede revertir (por ejemplo, saldo insuficiente en el destino), queda en la pila y se informa el motivo.
+     */
+    public Transaccion deshacerUltima(String actor) {
+        Stack<Transaccion> pila = buscarUsuario(actor).pilaReversibles();
+        while (!pila.isEmpty() && pila.peek().getEstado() != EstadoTransaccion.COMPLETADA) {
+            pila.pop();
+        }
+        if (pila.isEmpty()) {
+            throw new IllegalStateException("No hay operaciones para deshacer");
+        }
+        return revertir(actor, pila.peek().getId());
+    }
+
+    /** Operaciones que aún se pueden deshacer, la más reciente primero. */
+    public Transaccion[] listarReversibles(String actor) {
+        return pilaAArreglo(buscarUsuario(actor).pilaReversibles());
+    }
+
+    /** Historial de deshacer: operaciones ya revertidas, la última revertida primero. */
+    public Transaccion[] listarDeshechas(String actor) {
+        return pilaAArreglo(buscarUsuario(actor).pilaDeshechas());
+    }
+
+    private Transaccion[] pilaAArreglo(Stack<Transaccion> pila) {
+        Stack<Transaccion> copia = pila.clonStack();      // se recorre una copia para no vaciar la pila real
+        SimpleLinkedList<Transaccion> lista = new SimpleLinkedList<>();
+        while (!copia.isEmpty()) {
+            lista.addLast(copia.pop());
+        }
+        return lista.toArray(new Transaccion[0]);
+    }
+
+    /** Cada operación entra a la pila de quien podría revertirla: el titular de la billetera origen o, en recargas, del destino. */
+    private void apilarReversible(Transaccion transaccion) {
+        String codigo = transaccion.getCodigoOrigen() != null ? transaccion.getCodigoOrigen() : transaccion.getCodigoDestino();
+        usuarios.get(billeteras.get(codigo).getIdentificacionTitular()).pilaReversibles().push(transaccion);
+    }
+
+    // ---------- Árbol: ranking y reportes por puntos (solo administrador) ----------
+
+    /** Usuarios de mayor a menor puntaje. */
+    public Usuario[] rankingDePuntos(String actor) {
+        exigirAdmin(actor, "Solo el administrador puede ver el ranking");
+        return aUsuarios(ranking.inordenDescendente());
+    }
+
+    /** Usuarios con puntos entre minimo y maximo (incluidos), de menor a mayor. Búsqueda con poda en el árbol. */
+    public Usuario[] usuariosPorRango(String actor, int minimo, int maximo) {
+        exigirAdmin(actor, "Solo el administrador puede consultar usuarios por puntos");
+        if (minimo < 0 || maximo < minimo) {
+            throw new IllegalArgumentException("El rango de puntos no es válido");
+        }
+        return aUsuarios(ranking.enRango(ClavePuntos.limiteInferior(minimo), ClavePuntos.limiteSuperior(maximo)));
+    }
+
+    /** Cuántos usuarios hay en cada nivel, usando una búsqueda por rango por nivel. */
+    public ResumenNivel[] resumenPorNiveles(String actor) {
+        exigirAdmin(actor, "Solo el administrador puede ver el resumen por niveles");
+        Nivel[] niveles = Nivel.values();
+        ResumenNivel[] resumen = new ResumenNivel[niveles.length];
+        for (int i = 0; i < niveles.length; i++) {
+            int cantidad = ranking.enRango(ClavePuntos.limiteInferior(niveles[i].getMinimo()),
+                    ClavePuntos.limiteSuperior(niveles[i].getMaximo())).getSize();
+            Integer tope = niveles[i].getMaximo() == Integer.MAX_VALUE ? null : niveles[i].getMaximo();
+            resumen[i] = new ResumenNivel(niveles[i], niveles[i].getMinimo(), tope, cantidad);
+        }
+        return resumen;
+    }
+
+    private Usuario[] aUsuarios(SimpleLinkedList<ClavePuntos> claves) {
+        SimpleLinkedList<Usuario> lista = new SimpleLinkedList<>();
+        for (NodeSimple<ClavePuntos> nodo = claves.getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            lista.addLast(usuarios.get(nodo.getData().getIdentificacion()));
+        }
+        return lista.toArray(new Usuario[0]);
+    }
+
+    private static ClavePuntos clave(Usuario usuario) {
+        return new ClavePuntos(usuario.getPuntos(), usuario.getIdentificacion());
+    }
+
+    /** Cambia los puntos de un usuario y lo recoloca en el árbol (su clave depende de los puntos). */
+    private void cambiarPuntos(Usuario usuario, Runnable cambio) {
+        if (usuario.esAdmin()) {
+            cambio.run();
+            return;
+        }
+        ranking.eliminar(clave(usuario));
+        try {
+            cambio.run();
+        } finally {
+            ranking.insertar(clave(usuario));       // vuelve a entrar con los puntos nuevos (o con los de antes si falló)
+        }
+    }
+
+    // ---------- Grafo: red de transferencias (solo administrador) ----------
+
+    public RedTransferencias redDeUsuarios(String actor) {
+        exigirAdmin(actor, "Solo el administrador puede ver la red de transferencias");
+        return aRed(redUsuarios);
+    }
+
+    public RedTransferencias redDeBilleteras(String actor) {
+        exigirAdmin(actor, "Solo el administrador puede ver la red de transferencias");
+        return aRed(redBilleteras);
+    }
+
+    /** Ruta con menos saltos por la que ha circulado dinero entre dos usuarios; arreglo vacío si no hay. */
+    public String[] rutaDeDinero(String actor, String desde, String hasta) {
+        exigirAdmin(actor, "Solo el administrador puede consultar rutas de dinero");
+        if (!redUsuarios.existeVertice(desde) || !redUsuarios.existeVertice(hasta)) {
+            throw new IllegalArgumentException("Los dos usuarios deben existir");
+        }
+        SimpleLinkedList<String> camino = redUsuarios.caminoMasCorto(desde, hasta);
+        return camino == null ? new String[0] : camino.toArray(new String[0]);
+    }
+
+    private RedTransferencias aRed(Grafo<String> grafo) {
+        SimpleLinkedList<String> vertices = new SimpleLinkedList<>();
+        Cola<String> claves = grafo.vertices();
+        while (!claves.isEmpty()) {
+            vertices.addLast(claves.desencolar());
+        }
+        SimpleLinkedList<AristaRed> aristas = new SimpleLinkedList<>();
+        for (NodeSimple<Arista<String>> nodo = grafo.aristas().getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            Arista<String> a = nodo.getData();
+            aristas.addLast(new AristaRed(a.getOrigen(), a.getDestino(), a.getCantidad(), a.getTotal()));
+        }
+        return new RedTransferencias(vertices.toArray(new String[0]), aristas.toArray(new AristaRed[0]));
+    }
+
+    /** Una transferencia suma a la arista billetera->billetera y, si cambia de dueño, a la arista usuario->usuario. */
+    private void registrarEnLaRed(Billetera origen, Billetera destino, BigDecimal valor) {
+        redBilleteras.agregarArista(origen.getCodigo(), destino.getCodigo(), valor);
+        if (!origen.getIdentificacionTitular().equals(destino.getIdentificacionTitular())) {
+            redUsuarios.agregarArista(origen.getIdentificacionTitular(), destino.getIdentificacionTitular(), valor);
+        }
+    }
+
+    private void quitarDeLaRed(Billetera origen, Billetera destino, BigDecimal valor) {
+        redBilleteras.restarArista(origen.getCodigo(), destino.getCodigo(), valor);
+        if (!origen.getIdentificacionTitular().equals(destino.getIdentificacionTitular())) {
+            redUsuarios.restarArista(origen.getIdentificacionTitular(), destino.getIdentificacionTitular(), valor);
+        }
     }
 
     // ---------- Permisos ----------
@@ -458,6 +622,7 @@ public class PlataformaService {
         origen.retirar(valor);
         destino.recargar(valor);
         Transaccion transaccion = crearTransaccion(tipo, valor, codigoOrigen, codigoDestino);
+        registrarEnLaRed(origen, destino, valor);
         premiar(origen.getIdentificacionTitular(), transaccion, puntosPor(valor, factorPuntos));
         registrarEvento(origen.getIdentificacionTitular(), tipo.name(), NivelRiesgo.BAJO,
                 "Monto " + valor + " hacia " + codigoDestino);
@@ -471,7 +636,26 @@ public class PlataformaService {
         Transaccion transaccion = new Transaccion(id, LocalDateTime.now(), tipo, valor,
                 codigoOrigen, codigoDestino);
         transacciones.put(id, transaccion);
+        libro.addLast(transaccion);
+        registrarEnHistoriales(transaccion, codigoOrigen, codigoDestino);
+        apilarReversible(transaccion);
         return transaccion;
+    }
+
+    /** Anota el movimiento en la billetera origen y destino y en el historial de cada usuario involucrado (una vez). */
+    private void registrarEnHistoriales(Transaccion transaccion, String codigoOrigen, String codigoDestino) {
+        Billetera origen = codigoOrigen == null ? null : billeteras.get(codigoOrigen);
+        Billetera destino = codigoDestino == null ? null : billeteras.get(codigoDestino);
+        if (origen != null) {
+            origen.registrarMovimiento(transaccion);
+            usuarios.get(origen.getIdentificacionTitular()).registrarMovimiento(transaccion);
+        }
+        if (destino != null) {
+            destino.registrarMovimiento(transaccion);
+            if (origen == null || !origen.getIdentificacionTitular().equals(destino.getIdentificacionTitular())) {
+                usuarios.get(destino.getIdentificacionTitular()).registrarMovimiento(transaccion);
+            }
+        }
     }
 
     private void premiar(String identificacion, Transaccion transaccion, int puntos) {
@@ -484,7 +668,7 @@ public class PlataformaService {
     private void sumarPuntos(String identificacion, int puntos) {
         Usuario usuario = buscarUsuario(identificacion);
         Nivel anterior = usuario.getNivel();
-        usuario.sumarPuntos(puntos);
+        cambiarPuntos(usuario, () -> usuario.sumarPuntos(puntos));
         if (usuario.getNivel() != anterior) {
             notificar(identificacion, TipoAlerta.ASCENSO_NIVEL, "Subiste al nivel " + usuario.getNivel());
         }

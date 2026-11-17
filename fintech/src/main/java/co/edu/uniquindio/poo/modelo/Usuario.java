@@ -1,6 +1,8 @@
 package co.edu.uniquindio.poo.modelo;
 
 import co.edu.uniquindio.poo.Estructuras.Cola;
+import co.edu.uniquindio.poo.Estructuras.SimpleLinkedList;
+import co.edu.uniquindio.poo.Estructuras.Stack;
 import co.edu.uniquindio.poo.Estructuras.TablaHash;
 import co.edu.uniquindio.poo.seguridad.ClaveSegura;
 
@@ -13,6 +15,12 @@ public class Usuario {
     private final Rol rol;
     private int puntos;
     private final TablaHash<String, Billetera> billeteras;
+    // Listas enlazadas: movimientos en los que participa el usuario y beneficios que ha canjeado, en orden de llegada
+    private final SimpleLinkedList<Transaccion> historial = new SimpleLinkedList<>();
+    private final SimpleLinkedList<Beneficio> canjes = new SimpleLinkedList<>();
+    // Pilas de deshacer: la más reciente queda arriba. Reversibles = aún se pueden revertir; deshechas = ya revertidas
+    private final Stack<Transaccion> reversibles = new Stack<>();
+    private final Stack<Transaccion> deshechas = new Stack<>();
 
     /** claveHash puede ser null solo para usuarios antiguos sin contraseña; esos no pueden iniciar sesión. */
     public Usuario(String identificacion, String nombre, String correo, String claveHash) {
@@ -37,6 +45,31 @@ public class Usuario {
             throw new IllegalStateException("Ya existe la billetera " + billetera.getCodigo());
         }
         billeteras.put(billetera.getCodigo(), billetera);
+    }
+
+    public void registrarMovimiento(Transaccion transaccion) {
+        historial.addLast(transaccion);
+    }
+
+    // Sin prefijo get: así Jackson no incluye las listas en el JSON del usuario
+    public SimpleLinkedList<Transaccion> historialMovimientos() {
+        return historial;
+    }
+
+    public Stack<Transaccion> pilaReversibles() {
+        return reversibles;
+    }
+
+    public Stack<Transaccion> pilaDeshechas() {
+        return deshechas;
+    }
+
+    public void registrarCanje(Beneficio beneficio) {
+        canjes.addLast(beneficio);
+    }
+
+    public SimpleLinkedList<Beneficio> canjesRealizados() {
+        return canjes;
     }
 
     public Billetera buscarBilletera(String codigo) {

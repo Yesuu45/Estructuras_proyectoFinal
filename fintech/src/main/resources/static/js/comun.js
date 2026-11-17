@@ -83,6 +83,13 @@ async function mostrarSesion() {
     if (!nav) {
         return;
     }
+    if (usuario.rol === 'ADMIN' && !nav.querySelector('a[href="reportes.html"]')) {
+        const enlace = document.createElement('a');
+        enlace.href = 'reportes.html';
+        enlace.textContent = 'Reportes';
+        nav.appendChild(enlace);
+        marcarPaginaActiva();
+    }
     const caja = document.createElement('div');
     caja.className = 'sesion';
     const etiqueta = usuario.rol === 'ADMIN' ? 'Administrador' : usuario.nivel;

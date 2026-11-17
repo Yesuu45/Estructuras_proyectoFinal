@@ -1,5 +1,7 @@
 package co.edu.uniquindio.poo.modelo;
 
+import co.edu.uniquindio.poo.Estructuras.SimpleLinkedList;
+
 import java.math.BigDecimal;
 
 public class Billetera {
@@ -11,6 +13,8 @@ public class Billetera {
     private BigDecimal saldo;
     private BigDecimal umbralSaldoBajo;
     private boolean activa;
+    // Lista enlazada con los movimientos de esta billetera, en orden de llegada
+    private final SimpleLinkedList<Transaccion> historial = new SimpleLinkedList<>();
 
     public Billetera(String codigo, String nombre, TipoBilletera tipo,
                      String identificacionTitular, BigDecimal saldoInicial,
@@ -40,6 +44,15 @@ public class Billetera {
             throw new IllegalStateException("Saldo insuficiente");
         }
         saldo = saldo.subtract(monto);
+    }
+
+    public void registrarMovimiento(Transaccion transaccion) {
+        historial.addLast(transaccion);
+    }
+
+    // Sin prefijo get: así Jackson no incluye la lista en el JSON de la billetera
+    public SimpleLinkedList<Transaccion> historialMovimientos() {
+        return historial;
     }
 
     public boolean tieneSaldoBajo() {
