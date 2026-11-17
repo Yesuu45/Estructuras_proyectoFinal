@@ -156,7 +156,7 @@ public class PlataformaService {
 
     // ---------- Usuarios ----------
 
-    public Usuario registrarUsuario(String identificacion, String nombre, String correo, String clave) {
+    public synchronized Usuario registrarUsuario(String identificacion, String nombre, String correo, String clave) {
         if (usuarios.containsKey(identificacion)) {
             throw new IllegalStateException("Ya existe un usuario con identificación " + identificacion);
         }
@@ -170,7 +170,7 @@ public class PlataformaService {
     }
 
     /** Crea la cuenta de administrador si no existe. La llama InicializadorAdmin al arrancar. */
-    public void sembrarAdministrador(String identificacion, String nombre, String clave) {
+    public synchronized void sembrarAdministrador(String identificacion, String nombre, String clave) {
         if (usuarios.containsKey(identificacion)) {
             return;
         }
@@ -180,7 +180,7 @@ public class PlataformaService {
     }
 
     /** Mismo mensaje si falla la identificación o la contraseña, para no revelar qué usuarios existen. */
-    public Usuario autenticar(String identificacion, String clave) {
+    public synchronized Usuario autenticar(String identificacion, String clave) {
         Usuario usuario = identificacion == null ? null : usuarios.get(identificacion.trim());
         if (usuario == null || !usuario.coincideClave(clave)) {
             throw new IllegalArgumentException("Identificación o contraseña incorrectas");
@@ -188,11 +188,11 @@ public class PlataformaService {
         return usuario;
     }
 
-    public boolean existeUsuario(String identificacion) {
+    public synchronized boolean existeUsuario(String identificacion) {
         return identificacion != null && usuarios.containsKey(identificacion);
     }
 
-    public Usuario buscarUsuario(String identificacion) {
+    public synchronized Usuario buscarUsuario(String identificacion) {
         Usuario usuario = usuarios.get(identificacion);
         if (usuario == null) {
             throw new IllegalArgumentException("No existe el usuario " + identificacion);
@@ -201,7 +201,7 @@ public class PlataformaService {
     }
 
     /** El administrador edita a cualquiera; un usuario solo a sí mismo. La clave nueva es opcional. */
-    public Usuario modificarUsuario(String actor, String identificacion, String nombre, String correo,
+    public synchronized Usuario modificarUsuario(String actor, String identificacion, String nombre, String correo,
                                     String claveNueva) {
         exigirPropietario(actor, identificacion == null ? "" : identificacion,
                 "Solo puedes modificar tu propio perfil");
@@ -222,7 +222,7 @@ public class PlataformaService {
      * Solo el administrador. No se elimina al administrador ni a quien ya tiene billeteras,
      * porque sus movimientos siguen en el historial, el ranking y la red de transferencias.
      */
-    public void eliminarUsuario(String actor, String identificacion) {
+    public synchronized void eliminarUsuario(String actor, String identificacion) {
         exigirAdmin(actor, "Solo el administrador puede eliminar usuarios");
         Usuario usuario = buscarUsuario(identificacion);
         if (usuario.esAdmin()) {
@@ -240,7 +240,7 @@ public class PlataformaService {
     }
 
     /** Solo el administrador puede ver a todos los usuarios. */
-    public Usuario[] listarUsuarios(String actor) {
+    public synchronized Usuario[] listarUsuarios(String actor) {
         exigirAdmin(actor, "Solo el administrador puede ver la lista de usuarios");
         Cola<String> claves = usuarios.claves();
         Usuario[] resultado = new Usuario[claves.getSize()];
@@ -252,7 +252,7 @@ public class PlataformaService {
 
     // ---------- Billeteras ----------
 
-    public Billetera crearBilletera(String codigo, String nombre, TipoBilletera tipo,
+    public synchronized Billetera crearBilletera(String codigo, String nombre, TipoBilletera tipo,
                                     String identificacionTitular, BigDecimal saldoInicial,
                                     BigDecimal umbralSaldoBajo) {
         Usuario titular = buscarUsuario(identificacionTitular);
@@ -270,7 +270,7 @@ public class PlataformaService {
         return billetera;
     }
 
-    public Billetera buscarBilletera(String codigo) {
+    public synchronized Billetera buscarBilletera(String codigo) {
         if (codigo == null) {
             throw new IllegalArgumentException("El código de la billetera es obligatorio");
         }
@@ -282,7 +282,7 @@ public class PlataformaService {
     }
 
     /** El administrador ve todas; un usuario normal, solo las suyas. */
-    public Billetera[] listarBilleteras(String actor) {
+    public synchronized Billetera[] listarBilleteras(String actor) {
         boolean admin = esAdmin(actor);
         Cola<String> claves = billeteras.claves();
         Cola<Billetera> visibles = new Cola<>();
@@ -301,7 +301,7 @@ public class PlataformaService {
 
     // ---------- Transacciones ----------
 
-    public Transaccion operar(String actor, TipoTransaccion tipo, String origen, String destino, BigDecimal valor) {
+    public synchronized Transaccion operar(String actor, TipoTransaccion tipo, String origen, String destino, BigDecimal valor) {
         try {
             return ejecutarOperacion(actor, tipo, origen, destino, valor);
         } catch (IllegalStateException | IllegalArgumentException e) {
@@ -346,7 +346,7 @@ public class PlataformaService {
         };
     }
 
-    public Transaccion recargar(String codigoDestino, BigDecimal valor) {
+    public synchronized Transaccion recargar(String codigoDestino, BigDecimal valor) {
         Billetera destino = buscarBilletera(codigoDestino);
         destino.recargar(valor);
         persistirBilletera(destino);
@@ -356,7 +356,7 @@ public class PlataformaService {
         return transaccion;
     }
 
-    public Transaccion retirar(String codigoOrigen, BigDecimal valor) {
+    public synchronized Transaccion retirar(String codigoOrigen, BigDecimal valor) {
         Billetera origen = buscarBilletera(codigoOrigen);
         exigirLimiteDelNivel(origen, valor);
         origen.retirar(valor);
@@ -369,11 +369,11 @@ public class PlataformaService {
         return transaccion;
     }
 
-    public Transaccion transferir(String codigoOrigen, String codigoDestino, BigDecimal valor) {
+    public synchronized Transaccion transferir(String codigoOrigen, String codigoDestino, BigDecimal valor) {
         return ejecutarMovimiento(TipoTransaccion.TRANSFERENCIA, codigoOrigen, codigoDestino, valor, 3);
     }
 
-    public Transaccion revertir(String actor, String id) {
+    public synchronized Transaccion revertir(String actor, String id) {
         Transaccion transaccion = buscarTransaccion(id);
         if (transaccion.getEstado() != EstadoTransaccion.COMPLETADA) {
             throw new IllegalStateException("Solo se puede revertir una transacción completada");
@@ -417,7 +417,7 @@ public class PlataformaService {
         return transaccion;
     }
 
-    public Transaccion buscarTransaccion(String id) {
+    public synchronized Transaccion buscarTransaccion(String id) {
         Transaccion transaccion = transacciones.get(id);
         if (transaccion == null) {
             throw new IllegalArgumentException("No existe la transacción " + id);
@@ -425,7 +425,7 @@ public class PlataformaService {
         return transaccion;
     }
 
-    public Transaccion[] listarTransacciones(String actor) {
+    public synchronized Transaccion[] listarTransacciones(String actor) {
         return listarTransacciones(actor, null, null);
     }
 
@@ -433,7 +433,7 @@ public class PlataformaService {
      * Movimientos en orden cronológico, opcionalmente dentro de un período (desde y hasta incluidos; null = sin límite).
      * El administrador recorre el libro completo; un usuario normal, solo su propio historial.
      */
-    public Transaccion[] listarTransacciones(String actor, LocalDateTime desde, LocalDateTime hasta) {
+    public synchronized Transaccion[] listarTransacciones(String actor, LocalDateTime desde, LocalDateTime hasta) {
         if (desde != null && hasta != null && desde.isAfter(hasta)) {
             throw new IllegalArgumentException("La fecha inicial no puede ser posterior a la final");
         }
@@ -449,7 +449,7 @@ public class PlataformaService {
     }
 
     /** Historial de una billetera. Solo su titular o el administrador. */
-    public Transaccion[] historialBilletera(String actor, String codigo) {
+    public synchronized Transaccion[] historialBilletera(String actor, String codigo) {
         Billetera billetera = buscarBilletera(codigo);
         exigirPropietario(actor, billetera.getIdentificacionTitular(), "Esa billetera no es tuya");
         return billetera.historialMovimientos().toArray(new Transaccion[0]);
@@ -457,7 +457,7 @@ public class PlataformaService {
 
     // ---------- Operaciones programadas ----------
 
-    public OperacionProgramada programar(String actor, LocalDateTime fecha, TipoTransaccion tipo,
+    public synchronized OperacionProgramada programar(String actor, LocalDateTime fecha, TipoTransaccion tipo,
                                          String codigoOrigen, String codigoDestino, BigDecimal valor) {
         return programar(actor, fecha, tipo, codigoOrigen, codigoDestino, valor, Periodicidad.UNICA, 1);
     }
@@ -467,7 +467,7 @@ public class PlataformaService {
      * 'ocurrencias' ejecuciones en total (recargas automáticas, ahorro semanal, pagos recurrentes...).
      * Las recargas programadas solo llevan billetera destino.
      */
-    public OperacionProgramada programar(String actor, LocalDateTime fecha, TipoTransaccion tipo,
+    public synchronized OperacionProgramada programar(String actor, LocalDateTime fecha, TipoTransaccion tipo,
                                          String codigoOrigen, String codigoDestino, BigDecimal valor,
                                          Periodicidad periodicidad, Integer ocurrencias) {
         if (tipo == null) {
@@ -502,13 +502,13 @@ public class PlataformaService {
     }
 
     /** Ejecuta las operaciones vencidas (y avisa las próximas). Uso interno y pruebas; la API exige administrador. */
-    public int ejecutarPendientes() {
+    public synchronized int ejecutarPendientes() {
         int ejecutadas = ejecutarVencidas();
         avisarProximas();
         return ejecutadas;
     }
 
-    public int ejecutarPendientes(String actor) {
+    public synchronized int ejecutarPendientes(String actor) {
         exigirAdmin(actor, "Solo el administrador puede ejecutar las operaciones programadas");
         return ejecutarPendientes();
     }
@@ -566,7 +566,7 @@ public class PlataformaService {
     }
 
     /** Avisa (una sola vez) de las operaciones pendientes que se ejecutarán dentro de las próximas 24 horas. */
-    public int avisarProximas() {
+    public synchronized int avisarProximas() {
         LocalDateTime ahora = ahora();
         LocalDateTime limite = ahora.plusHours(HORAS_AVISO_PROGRAMADA);
         Cola<String> claves = programadas.claves();
@@ -590,16 +590,16 @@ public class PlataformaService {
     // ---------- Reloj simulado ----------
 
     /** Hora de la plataforma: la real más el desfase simulado. Todo (fechas, programadas, alertas) usa esta hora. */
-    public LocalDateTime ahora() {
+    public synchronized LocalDateTime ahora() {
         return LocalDateTime.now().plus(desfase);
     }
 
-    public AvanceReloj estadoReloj() {
+    public synchronized AvanceReloj estadoReloj() {
         return new AvanceReloj(ahora(), !desfase.isZero(), 0, 0);
     }
 
     /** Adelanta el reloj; si 'ejecutar', procesa de una vez las programadas que vencieron (ejecución automática simulada). */
-    public AvanceReloj avanzarReloj(String actor, long minutos, boolean ejecutar) {
+    public synchronized AvanceReloj avanzarReloj(String actor, long minutos, boolean ejecutar) {
         exigirAdmin(actor, "Solo el administrador puede mover el reloj");
         if (minutos <= 0) {
             throw new IllegalArgumentException("Los minutos a avanzar deben ser mayores que cero");
@@ -610,14 +610,14 @@ public class PlataformaService {
         return new AvanceReloj(ahora(), !desfase.isZero(), avisadas, ejecutadas);
     }
 
-    public AvanceReloj restablecerReloj(String actor) {
+    public synchronized AvanceReloj restablecerReloj(String actor) {
         exigirAdmin(actor, "Solo el administrador puede mover el reloj");
         desfase = Duration.ZERO;
         return estadoReloj();
     }
 
     /** Un usuario normal ve solo las operaciones programadas desde sus billeteras. */
-    public OperacionProgramada[] listarProgramadas(String actor) {
+    public synchronized OperacionProgramada[] listarProgramadas(String actor) {
         boolean admin = esAdmin(actor);
         Cola<String> claves = programadas.claves();
         Cola<OperacionProgramada> visibles = new Cola<>();
@@ -637,7 +637,7 @@ public class PlataformaService {
 
     // ---------- Beneficios ----------
 
-    public Beneficio canjear(String identificacion, String idBeneficio) {
+    public synchronized Beneficio canjear(String identificacion, String idBeneficio) {
         Usuario usuario = buscarUsuario(identificacion);
         BeneficioDisponible oferta = buscarBeneficioDisponible(idBeneficio);
         if (usuario.getPuntos() < oferta.getPuntosCosto()) {
@@ -658,7 +658,7 @@ public class PlataformaService {
         return beneficio;
     }
 
-    public BeneficioDisponible[] listarCatalogo() {
+    public synchronized BeneficioDisponible[] listarCatalogo() {
         Cola<String> claves = catalogo.claves();
         BeneficioDisponible[] resultado = new BeneficioDisponible[claves.getSize()];
         for (int i = 0; i < resultado.length; i++) {
@@ -696,7 +696,7 @@ public class PlataformaService {
     }
 
     /** El administrador ve todos los canjes; un usuario normal, los suyos. */
-    public Beneficio[] listarBeneficios(String actor) {
+    public synchronized Beneficio[] listarBeneficios(String actor) {
         SimpleLinkedList<Beneficio> fuente = esAdmin(actor) ? beneficios : buscarUsuario(actor).canjesRealizados();
         return fuente.toArray(new Beneficio[0]);
     }
@@ -704,7 +704,7 @@ public class PlataformaService {
     // ---------- Auditoría y notificaciones ----------
 
     /** La auditoría completa es solo del administrador. */
-    public EventoAuditoria[] listarEventos(String actor) {
+    public synchronized EventoAuditoria[] listarEventos(String actor) {
         exigirAdmin(actor, "Solo el administrador puede ver la auditoría");
         Cola<EventoAuditoria> copia = eventos.clonarCola();
         EventoAuditoria[] resultado = new EventoAuditoria[copia.getSize()];
@@ -714,7 +714,7 @@ public class PlataformaService {
         return resultado;
     }
 
-    public Notificacion[] listarNotificaciones(String actor) {
+    public synchronized Notificacion[] listarNotificaciones(String actor) {
         boolean admin = esAdmin(actor);
         Cola<Notificacion> copia = notificaciones.clonarCola();
         Cola<Notificacion> visibles = new Cola<>();
@@ -732,7 +732,7 @@ public class PlataformaService {
     }
 
     /** Despacha las notificaciones pendientes: las propias (o todas, si es el administrador). Devuelve cuántas. */
-    public int despacharNotificaciones(String actor) {
+    public synchronized int despacharNotificaciones(String actor) {
         boolean admin = esAdmin(actor);
         Cola<Notificacion> copia = notificaciones.clonarCola();
         int despachadas = 0;
@@ -748,7 +748,7 @@ public class PlataformaService {
 
     // ---------- Ventajas por nivel ----------
 
-    public VentajaNivel[] ventajasPorNivel() {
+    public synchronized VentajaNivel[] ventajasPorNivel() {
         Nivel[] niveles = Nivel.values();
         VentajaNivel[] resultado = new VentajaNivel[niveles.length];
         for (int i = 0; i < niveles.length; i++) {
@@ -889,7 +889,7 @@ public class PlataformaService {
     }
 
     /** Consulta posterior del historial especial: el administrador ve todos, un usuario los suyos. */
-    public EventoAuditoria[] listarEventosInusuales(String actor, NivelRiesgo minimo) {
+    public synchronized EventoAuditoria[] listarEventosInusuales(String actor, NivelRiesgo minimo) {
         boolean admin = esAdmin(actor);
         NivelRiesgo piso = minimo == null ? NivelRiesgo.BAJO : minimo;
         Cola<EventoAuditoria> visibles = new Cola<>();
@@ -909,7 +909,7 @@ public class PlataformaService {
 
     // ---------- Analítica de movimientos (solo administrador) ----------
 
-    public Conteo[] billeterasMasUsadas(String actor, int n) {
+    public synchronized Conteo[] billeterasMasUsadas(String actor, int n) {
         exigirAdmin(actor, "Solo el administrador puede ver la analítica");
         Cola<String> claves = billeteras.claves();
         Conteo[] todos = new Conteo[claves.getSize()];
@@ -921,7 +921,7 @@ public class PlataformaService {
     }
 
     /** Transferencias y pagos programados completados, contados por el titular de la billetera origen. */
-    public Conteo[] usuariosConMasTransferencias(String actor, int n) {
+    public synchronized Conteo[] usuariosConMasTransferencias(String actor, int n) {
         exigirAdmin(actor, "Solo el administrador puede ver la analítica");
         TablaHash<String, Integer> cuentas = new TablaHash<>();
         for (NodeSimple<Transaccion> nodo = libro.getFirstNode(); nodo != null; nodo = nodo.getNext()) {
@@ -937,7 +937,7 @@ public class PlataformaService {
     }
 
     /** Movimientos acumulados por categoría (tipo) de billetera: ahorros, corriente, digital. */
-    public Conteo[] categoriasMasActivas(String actor) {
+    public synchronized Conteo[] categoriasMasActivas(String actor) {
         exigirAdmin(actor, "Solo el administrador puede ver la analítica");
         TipoBilletera[] tipos = TipoBilletera.values();
         long[] movimientos = new long[tipos.length];
@@ -954,7 +954,7 @@ public class PlataformaService {
     }
 
     /** Cuántas transacciones hay de cada tipo (recarga, retiro, transferencia, pago programado). */
-    public Conteo[] frecuenciaPorTipo(String actor) {
+    public synchronized Conteo[] frecuenciaPorTipo(String actor) {
         exigirAdmin(actor, "Solo el administrador puede ver la analítica");
         TipoTransaccion[] tipos = TipoTransaccion.values();
         long[] cuentas = new long[tipos.length];
@@ -969,7 +969,7 @@ public class PlataformaService {
     }
 
     /** Suma de las transacciones completadas con fecha entre desde y hasta (ambas inclusive). */
-    public MontoMovilizado montoMovilizado(String actor, LocalDateTime desde, LocalDateTime hasta) {
+    public synchronized MontoMovilizado montoMovilizado(String actor, LocalDateTime desde, LocalDateTime hasta) {
         exigirAdmin(actor, "Solo el administrador puede ver la analítica");
         if (desde == null || hasta == null || desde.isAfter(hasta)) {
             throw new IllegalArgumentException("El rango de fechas no es válido");
@@ -988,7 +988,7 @@ public class PlataformaService {
     }
 
     /** Pares de usuarios con más transferencias entre sí (aristas del grafo, de mayor a menor frecuencia). */
-    public AristaRed[] paresFrecuentes(String actor, int n) {
+    public synchronized AristaRed[] paresFrecuentes(String actor, int n) {
         exigirAdmin(actor, "Solo el administrador puede ver la analítica");
         AristaRed[] aristas = redDeUsuarios(actor).aristas();
         for (int i = 1; i < aristas.length; i++) {
@@ -1053,7 +1053,7 @@ public class PlataformaService {
      * (como titular de la billetera origen o destino, una vez por transacción; las revertidas también cuentan).
      * El primero del resultado es el más activo.
      */
-    public Conteo[] usuariosMasActivos(String actor, LocalDateTime desde, LocalDateTime hasta, int n) {
+    public synchronized Conteo[] usuariosMasActivos(String actor, LocalDateTime desde, LocalDateTime hasta, int n) {
         exigirAdmin(actor, "Solo el administrador puede ver la actividad de los usuarios");
         if (desde == null || hasta == null || desde.isAfter(hasta)) {
             throw new IllegalArgumentException("El rango de fechas no es válido");
@@ -1083,7 +1083,7 @@ public class PlataformaService {
     }
 
     /** Ciclos de dinero (A -> B -> ... -> A) en la red de 'usuarios' o de 'billeteras'. */
-    public RutaFrecuente[] ciclosDeTransferencias(String actor, String red) {
+    public synchronized RutaFrecuente[] ciclosDeTransferencias(String actor, String red) {
         exigirAdmin(actor, "Solo el administrador puede analizar la red de transferencias");
         Grafo<String> grafo = elegirRed(red);
         SimpleLinkedList<SimpleLinkedList<String>> ciclos = grafo.ciclos(MAX_CICLOS);
@@ -1099,7 +1099,7 @@ public class PlataformaService {
      * Rutas de 2 y 3 saltos por las que más veces ha circulado dinero, ordenadas por la arista menos usada
      * de la ruta (cuántas veces se ha podido completar) y luego por el dinero acumulado.
      */
-    public RutaFrecuente[] rutasFrecuentes(String actor, String red, int n) {
+    public synchronized RutaFrecuente[] rutasFrecuentes(String actor, String red, int n) {
         exigirAdmin(actor, "Solo el administrador puede analizar la red de transferencias");
         if (n < 1) {
             throw new IllegalArgumentException("La cantidad a mostrar debe ser al menos 1");
@@ -1169,7 +1169,7 @@ public class PlataformaService {
     }
 
     /** Las n transacciones completadas de mayor valor, sacadas de un montículo (cola de prioridad). */
-    public Transaccion[] transaccionesMayorValor(String actor, int n) {
+    public synchronized Transaccion[] transaccionesMayorValor(String actor, int n) {
         exigirAdmin(actor, "Solo el administrador puede ver las transacciones de mayor valor");
         if (n < 1) {
             throw new IllegalArgumentException("La cantidad a mostrar debe ser al menos 1");
@@ -1188,7 +1188,7 @@ public class PlataformaService {
     }
 
     /** Compara estructuras propias y de Java en operaciones parecidas (ver ComparadorRendimiento). */
-    public ResultadoRendimiento[] compararRendimiento(String actor, int elementos) {
+    public synchronized ResultadoRendimiento[] compararRendimiento(String actor, int elementos) {
         exigirAdmin(actor, "Solo el administrador puede ejecutar la comparación de rendimiento");
         return ComparadorRendimiento.comparar(elementos);
     }
@@ -1199,7 +1199,7 @@ public class PlataformaService {
      * Revierte la operación más reciente que aún se pueda deshacer (el tope de la pila del usuario).
      * Si no se puede revertir (por ejemplo, saldo insuficiente en el destino), queda en la pila y se informa el motivo.
      */
-    public Transaccion deshacerUltima(String actor) {
+    public synchronized Transaccion deshacerUltima(String actor) {
         Stack<Transaccion> pila = buscarUsuario(actor).pilaReversibles();
         while (!pila.isEmpty() && pila.peek().getEstado() != EstadoTransaccion.COMPLETADA) {
             pila.pop();
@@ -1211,12 +1211,12 @@ public class PlataformaService {
     }
 
     /** Operaciones que aún se pueden deshacer, la más reciente primero. */
-    public Transaccion[] listarReversibles(String actor) {
+    public synchronized Transaccion[] listarReversibles(String actor) {
         return pilaAArreglo(buscarUsuario(actor).pilaReversibles());
     }
 
     /** Historial de deshacer: operaciones ya revertidas, la última revertida primero. */
-    public Transaccion[] listarDeshechas(String actor) {
+    public synchronized Transaccion[] listarDeshechas(String actor) {
         return pilaAArreglo(buscarUsuario(actor).pilaDeshechas());
     }
 
@@ -1238,13 +1238,13 @@ public class PlataformaService {
     // ---------- Árbol: ranking y reportes por puntos (solo administrador) ----------
 
     /** Usuarios de mayor a menor puntaje. */
-    public Usuario[] rankingDePuntos(String actor) {
+    public synchronized Usuario[] rankingDePuntos(String actor) {
         exigirAdmin(actor, "Solo el administrador puede ver el ranking");
         return aUsuarios(ranking.inordenDescendente());
     }
 
     /** Usuarios con puntos entre minimo y maximo (incluidos), de menor a mayor. Búsqueda con poda en el árbol. */
-    public Usuario[] usuariosPorRango(String actor, int minimo, int maximo) {
+    public synchronized Usuario[] usuariosPorRango(String actor, int minimo, int maximo) {
         exigirAdmin(actor, "Solo el administrador puede consultar usuarios por puntos");
         if (minimo < 0 || maximo < minimo) {
             throw new IllegalArgumentException("El rango de puntos no es válido");
@@ -1253,7 +1253,7 @@ public class PlataformaService {
     }
 
     /** Cuántos usuarios hay en cada nivel, usando una búsqueda por rango por nivel. */
-    public ResumenNivel[] resumenPorNiveles(String actor) {
+    public synchronized ResumenNivel[] resumenPorNiveles(String actor) {
         exigirAdmin(actor, "Solo el administrador puede ver el resumen por niveles");
         Nivel[] niveles = Nivel.values();
         ResumenNivel[] resumen = new ResumenNivel[niveles.length];
@@ -1296,18 +1296,18 @@ public class PlataformaService {
 
     // ---------- Grafo: red de transferencias (solo administrador) ----------
 
-    public RedTransferencias redDeUsuarios(String actor) {
+    public synchronized RedTransferencias redDeUsuarios(String actor) {
         exigirAdmin(actor, "Solo el administrador puede ver la red de transferencias");
         return aRed(redUsuarios);
     }
 
-    public RedTransferencias redDeBilleteras(String actor) {
+    public synchronized RedTransferencias redDeBilleteras(String actor) {
         exigirAdmin(actor, "Solo el administrador puede ver la red de transferencias");
         return aRed(redBilleteras);
     }
 
     /** Ruta con menos saltos por la que ha circulado dinero entre dos usuarios; arreglo vacío si no hay. */
-    public String[] rutaDeDinero(String actor, String desde, String hasta) {
+    public synchronized String[] rutaDeDinero(String actor, String desde, String hasta) {
         exigirAdmin(actor, "Solo el administrador puede consultar rutas de dinero");
         if (!redUsuarios.existeVertice(desde) || !redUsuarios.existeVertice(hasta)) {
             throw new IllegalArgumentException("Los dos usuarios deben existir");
