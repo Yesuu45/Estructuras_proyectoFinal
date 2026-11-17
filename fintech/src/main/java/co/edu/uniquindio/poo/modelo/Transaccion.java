@@ -13,6 +13,7 @@ public class Transaccion {
     private final String codigoDestino;
     private EstadoTransaccion estado;
     private int puntosGenerados;
+    private NivelRiesgo nivelRiesgo = NivelRiesgo.BAJO;
 
     public Transaccion(String id, LocalDateTime fecha, TipoTransaccion tipo, BigDecimal valor,
                        String codigoOrigen, String codigoDestino) {
@@ -42,6 +43,15 @@ public class Transaccion {
             throw new IllegalStateException("Solo se puede revertir una transacción completada");
         }
         estado = EstadoTransaccion.REVERTIDA;
+    }
+
+    /** Marca la transacción con el riesgo detectado por el módulo de comportamiento inusual. */
+    public void marcarRiesgo(NivelRiesgo nivel) {
+        this.nivelRiesgo = nivel == null ? NivelRiesgo.BAJO : nivel;
+    }
+
+    public NivelRiesgo getNivelRiesgo() {
+        return nivelRiesgo;
     }
 
     public void setPuntosGenerados(int puntosGenerados) {

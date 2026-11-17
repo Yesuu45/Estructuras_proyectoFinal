@@ -112,10 +112,50 @@ document.getElementById('form-ruta').addEventListener('submit', async evento => 
     }
 });
 
+// ---------- Analítica ----------
+
+function filasConteo(tabla, conteos, conPosicion, conNombre) {
+    pintar(tabla, conteos.length === 0
+        ? ['<tr><td colspan="3">Sin datos todavía</td></tr>']
+        : conteos.map((c, i) => `<tr>${conPosicion ? `<td>${i + 1}</td>` : ''}
+            <td>${escapar(conNombre ? etiqueta(c.clave) : c.clave)}</td><td>${c.cantidad}</td></tr>`));
+}
+
+async function cargarAnalitica() {
+    const [billeteras, usuarios, categorias, tipos, pares] = await Promise.all([
+        peticion('GET', '/reportes/analitica/billeteras-usadas?n=5'),
+        peticion('GET', '/reportes/analitica/usuarios-transferencias?n=5'),
+        peticion('GET', '/reportes/analitica/categorias'),
+        peticion('GET', '/reportes/analitica/frecuencia-tipos'),
+        peticion('GET', '/reportes/analitica/pares-frecuentes?n=5')
+    ]);
+    filasConteo('tabla-billeteras-usadas', billeteras, true, false);
+    filasConteo('tabla-usuarios-transferencias', usuarios, true, true);
+    filasConteo('tabla-categorias', categorias, false, false);
+    filasConteo('tabla-frecuencia-tipos', tipos, false, false);
+    pintar('tabla-pares', pares.length === 0
+        ? ['<tr><td colspan="5">Todavía no hay transferencias entre usuarios</td></tr>']
+        : pares.map((a, i) => `<tr><td>${i + 1}</td><td>${escapar(etiqueta(a.origen))}</td>
+            <td>${escapar(etiqueta(a.destino))}</td><td>${a.cantidad}</td><td>${escapar(a.total)}</td></tr>`));
+}
+
+document.getElementById('form-monto').addEventListener('submit', async evento => {
+    evento.preventDefault();
+    const datos = Object.fromEntries(new FormData(evento.target));
+    try {
+        const r = await peticion('GET',
+            `/reportes/analitica/monto?desde=${encodeURIComponent(datos.desde)}&hasta=${encodeURIComponent(datos.hasta)}`);
+        document.getElementById('resultado-monto').textContent =
+            `Entre ${datos.desde} y ${datos.hasta} se movilizaron ${r.total} en ${r.transacciones} transacciones completadas.`;
+    } catch (err) {
+        mostrarMensaje(err.message, 'error');
+    }
+});
+
 async function iniciar() {
     const usuarios = await peticion('GET', '/usuarios');
     usuarios.forEach(u => { nombres[u.identificacion] = u.nombre; });
-    await Promise.all([cargarRanking(), cargarNiveles(), cargarRedUsuarios(), cargarRedBilleteras()]);
+    await Promise.all([cargarRanking(), cargarNiveles(), cargarRedUsuarios(), cargarRedBilleteras(), cargarAnalitica()]);
 }
 
 iniciar().catch(err => mostrarMensaje(err.message, 'error'));

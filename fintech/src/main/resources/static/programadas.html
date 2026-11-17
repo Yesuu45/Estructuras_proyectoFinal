@@ -22,22 +22,45 @@
 <main>
     <div id="mensajes" class="mensaje" hidden></div>
     <section class="seccion">
+        <h2>Reloj de la plataforma</h2>
+        <p class="nota">Las operaciones programadas se ejecutan cuando llega su fecha según este reloj. El administrador puede adelantarlo para simular el paso del tiempo.</p>
+        <p><strong id="reloj-hora">...</strong> <span id="reloj-tipo" class="nota"></span></p>
+        <div id="controles-reloj" hidden>
+            <div class="formulario">
+                <button type="button" class="secundario" data-minutos="60">+1 hora</button>
+                <button type="button" class="secundario" data-minutos="1440">+1 día</button>
+                <button type="button" class="secundario" data-minutos="10080">+7 días</button>
+                <button type="button" class="secundario" data-minutos="43200">+30 días</button>
+                <label><input type="checkbox" id="reloj-ejecutar" checked> Ejecutar las programadas que venzan</label>
+                <button type="button" id="reloj-restablecer" class="secundario">Volver a la hora real</button>
+            </div>
+        </div>
+    </section>
+    <section class="seccion">
         <h2>Operaciones programadas</h2>
         <form id="form-programada" class="formulario">
             <input name="fechaEjecucion" type="datetime-local" required>
-            <select name="tipo" required>
+            <select name="tipo" id="select-tipo-programada" required>
                 <option value="TRANSFERENCIA">Transferencia</option>
                 <option value="PAGO_PROGRAMADO">Pago programado</option>
+                <option value="RECARGA">Recarga automática</option>
             </select>
-            <input name="codigoOrigen" placeholder="Billetera origen" required>
+            <input name="codigoOrigen" id="campo-origen-programada" placeholder="Billetera origen" required>
             <input name="codigoDestino" placeholder="Billetera destino" required>
             <input name="valor" type="number" step="0.01" min="0.01" placeholder="Valor" required>
+            <select name="periodicidad" id="select-periodicidad">
+                <option value="UNICA">Una sola vez</option>
+                <option value="DIARIA">Cada día</option>
+                <option value="SEMANAL">Cada semana</option>
+                <option value="MENSUAL">Cada mes</option>
+            </select>
+            <input name="ocurrencias" id="campo-ocurrencias" type="number" min="1" max="52" step="1" value="1" title="Cuántas veces se ejecuta en total" disabled>
             <button type="submit">Programar</button>
         </form>
-        <button id="btn-ejecutar" class="secundario">Ejecutar pendientes</button>
+        <button id="btn-ejecutar" class="secundario" hidden>Ejecutar pendientes</button>
         <table>
             <thead>
-                <tr><th>Id</th><th>Fecha</th><th>Tipo</th><th>Valor</th><th>Origen</th><th>Destino</th><th>Estado</th></tr>
+                <tr><th>Id</th><th>Fecha</th><th>Tipo</th><th>Valor</th><th>Origen</th><th>Destino</th><th>Repetición</th><th>Estado</th></tr>
             </thead>
             <tbody id="tabla-programadas"></tbody>
         </table>

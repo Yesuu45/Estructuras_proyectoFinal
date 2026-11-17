@@ -358,3 +358,22 @@ nav .sesion {
     color: var(--tinta-suave);
     font-size: .9rem;
 }
+
+/* Nivel de riesgo (comportamiento inusual) */
+.riesgo {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radio);
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--ok);
+    background: var(--ok-fondo);
+}
+.riesgo-MEDIO {
+    color: #8A5A00;
+    background: #FFF1D6;
+}
+.riesgo-ALTO {
+    color: var(--error);
+    background: var(--error-fondo);
+}

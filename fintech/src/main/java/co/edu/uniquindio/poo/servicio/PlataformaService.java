@@ -7,6 +7,7 @@ import co.edu.uniquindio.poo.seguridad.ClaveSegura;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 /**
@@ -18,6 +19,9 @@ public class PlataformaService {
 
     private static final BigDecimal MONTO_PARA_PUNTOS = new BigDecimal("100");
     private static final int BONO_PAGO_PROGRAMADO = 5;
+    private static final int TOPE_NOTIFICACIONES = 10;       // notificaciones recientes que se conservan por usuario
+    private static final int HORAS_AVISO_PROGRAMADA = 24;    // aviso previo de una operación programada
+    private static final int MAX_OCURRENCIAS = 52;
 
     private final TablaHash<String, Usuario> usuarios = new TablaHash<>();
     private final TablaHash<String, Billetera> billeteras = new TablaHash<>();
@@ -35,6 +39,12 @@ public class PlataformaService {
     private final Grafo<String> redBilleteras = new Grafo<>();
     private final Cola<EventoAuditoria> eventos = new Cola<>();
     private final Cola<Notificacion> notificaciones = new Cola<>();
+    // Historial especial de auditoría: solo los eventos de comportamiento inusual
+    private final SimpleLinkedList<EventoAuditoria> eventosInusuales = new SimpleLinkedList<>();
+    // Cuántas notificaciones recientes tiene cada usuario (para aplicar el tope)
+    private final TablaHash<String, Integer> conteoNotificaciones = new TablaHash<>();
+    // Reloj simulado: la hora de la plataforma es la real más este desfase (cero = reloj real)
+    private Duration desfase = Duration.ZERO;
     private int secuencia = 0;
 
     // ---------- Usuarios ----------
@@ -78,6 +88,43 @@ public class PlataformaService {
             throw new IllegalArgumentException("No existe el usuario " + identificacion);
         }
         return usuario;
+    }
+
+    /** El administrador edita a cualquiera; un usuario solo a sí mismo. La clave nueva es opcional. */
+    public Usuario modificarUsuario(String actor, String identificacion, String nombre, String correo,
+                                    String claveNueva) {
+        exigirPropietario(actor, identificacion == null ? "" : identificacion,
+                "Solo puedes modificar tu propio perfil");
+        Usuario usuario = buscarUsuario(identificacion);
+        boolean cambiaClave = claveNueva != null && !claveNueva.isBlank();
+        String hashNuevo = cambiaClave ? ClaveSegura.generarHash(claveNueva) : null;   // valida antes de tocar nada
+        usuario.actualizarPerfil(nombre, correo);
+        if (cambiaClave) {
+            usuario.cambiarClave(hashNuevo);
+        }
+        registrarEvento(actor, "USUARIO_MODIFICADO", NivelRiesgo.BAJO,
+                "Perfil de " + identificacion + (cambiaClave ? " (con cambio de contraseña)" : ""));
+        return usuario;
+    }
+
+    /**
+     * Solo el administrador. No se elimina al administrador ni a quien ya tiene billeteras,
+     * porque sus movimientos siguen en el historial, el ranking y la red de transferencias.
+     */
+    public void eliminarUsuario(String actor, String identificacion) {
+        exigirAdmin(actor, "Solo el administrador puede eliminar usuarios");
+        Usuario usuario = buscarUsuario(identificacion);
+        if (usuario.esAdmin()) {
+            throw new IllegalStateException("No se puede eliminar la cuenta de administrador");
+        }
+        if (usuario.cantidadBilleteras() > 0) {
+            throw new IllegalStateException("No se puede eliminar a " + identificacion + ": tiene "
+                    + usuario.cantidadBilleteras() + " billetera(s) con movimientos registrados");
+        }
+        ranking.eliminar(clave(usuario));
+        redUsuarios.eliminarVertice(identificacion);
+        usuarios.remove(identificacion);
+        registrarEvento(actor, "USUARIO_ELIMINADO", NivelRiesgo.MEDIO, "Usuario " + identificacion + " eliminado");
     }
 
     /** Solo el administrador puede ver a todos los usuarios. */
@@ -141,6 +188,26 @@ public class PlataformaService {
     // ---------- Transacciones ----------
 
     public Transaccion operar(String actor, TipoTransaccion tipo, String origen, String destino, BigDecimal valor) {
+        try {
+            return ejecutarOperacion(actor, tipo, origen, destino, valor);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            avisarRechazo(actor, tipo, e.getMessage());
+            throw e;
+        }
+    }
+
+    /** Operación rechazada por reglas de negocio (saldo, límite, billetera bloqueada...): alerta y auditoría. */
+    private void avisarRechazo(String actor, TipoTransaccion tipo, String motivo) {
+        if (actor == null || !usuarios.containsKey(actor)) {
+            return;
+        }
+        String operacion = tipo == null ? "La operación" : tipo.name();
+        notificar(actor, TipoAlerta.OPERACION_RECHAZADA, operacion + " rechazada: " + motivo);
+        registrarEvento(actor, "OPERACION_RECHAZADA", NivelRiesgo.MEDIO, operacion + ": " + motivo);
+    }
+
+    private Transaccion ejecutarOperacion(String actor, TipoTransaccion tipo, String origen, String destino,
+                                          BigDecimal valor) {
         if (tipo == null) {
             throw new IllegalArgumentException("El tipo de operación es obligatorio");
         }
@@ -176,9 +243,11 @@ public class PlataformaService {
 
     public Transaccion retirar(String codigoOrigen, BigDecimal valor) {
         Billetera origen = buscarBilletera(codigoOrigen);
+        exigirLimiteDelNivel(origen, valor);
         origen.retirar(valor);
         Transaccion transaccion = crearTransaccion(TipoTransaccion.RETIRO, valor, codigoOrigen, null);
         premiar(origen.getIdentificacionTitular(), transaccion, puntosPor(valor, 2));
+        evaluarRiesgo(transaccion, origen);
         registrarEvento(origen.getIdentificacionTitular(), "RETIRO", NivelRiesgo.BAJO, "Monto " + valor);
         verificarSaldoBajo(origen);
         return transaccion;
@@ -271,29 +340,76 @@ public class PlataformaService {
 
     public OperacionProgramada programar(String actor, LocalDateTime fecha, TipoTransaccion tipo,
                                          String codigoOrigen, String codigoDestino, BigDecimal valor) {
-        if (tipo != TipoTransaccion.TRANSFERENCIA && tipo != TipoTransaccion.PAGO_PROGRAMADO) {
-            throw new IllegalArgumentException("Solo se pueden programar transferencias o pagos");
+        return programar(actor, fecha, tipo, codigoOrigen, codigoDestino, valor, Periodicidad.UNICA, 1);
+    }
+
+    /**
+     * Programa una operación futura. Con periodicidad distinta de UNICA se repite hasta completar
+     * 'ocurrencias' ejecuciones en total (recargas automáticas, ahorro semanal, pagos recurrentes...).
+     * Las recargas programadas solo llevan billetera destino.
+     */
+    public OperacionProgramada programar(String actor, LocalDateTime fecha, TipoTransaccion tipo,
+                                         String codigoOrigen, String codigoDestino, BigDecimal valor,
+                                         Periodicidad periodicidad, Integer ocurrencias) {
+        if (tipo == null) {
+            throw new IllegalArgumentException("El tipo de operación es obligatorio");
+        }
+        if (tipo == TipoTransaccion.RETIRO) {
+            throw new IllegalArgumentException("Solo se pueden programar recargas, transferencias o pagos");
+        }
+        Periodicidad frecuencia = periodicidad == null ? Periodicidad.UNICA : periodicidad;
+        int total = frecuencia == Periodicidad.UNICA || ocurrencias == null ? 1 : ocurrencias;
+        if (total < 1 || total > MAX_OCURRENCIAS) {
+            throw new IllegalArgumentException("Las ocurrencias deben estar entre 1 y " + MAX_OCURRENCIAS);
         }
         String origen = normalizar(codigoOrigen);
         String destino = normalizar(codigoDestino);
-        exigirBilleteraPropia(actor, origen);
-        buscarBilletera(destino);
+        if (tipo == TipoTransaccion.RECARGA) {
+            origen = null;
+            exigirBilleteraPropia(actor, destino);
+        } else {
+            exigirBilleteraPropia(actor, origen);
+            buscarBilletera(destino);
+        }
 
         String id = "P" + (++secuencia);
-        OperacionProgramada operacion = new OperacionProgramada(id, fecha, tipo, valor, origen, destino);
+        OperacionProgramada operacion = new OperacionProgramada(id, fecha, tipo, valor, origen, destino,
+                frecuencia, total - 1);
         programadas.put(id, operacion);
         pendientes.insertar(operacion);
+        avisarProximas();
         return operacion;
     }
 
+    /** Ejecuta las operaciones vencidas (y avisa las próximas). Uso interno y pruebas; la API exige administrador. */
     public int ejecutarPendientes() {
+        int ejecutadas = ejecutarVencidas();
+        avisarProximas();
+        return ejecutadas;
+    }
+
+    public int ejecutarPendientes(String actor) {
+        exigirAdmin(actor, "Solo el administrador puede ejecutar las operaciones programadas");
+        return ejecutarPendientes();
+    }
+
+    /**
+     * Saca de la cola de prioridad, en orden de fecha, solo las operaciones cuya fecha ya llegó según el reloj
+     * de la plataforma. Si la serie es periódica, deja programada la siguiente ocurrencia.
+     */
+    private int ejecutarVencidas() {
         int ejecutadas = 0;
-        while (!pendientes.isEmpty()) {
+        LocalDateTime ahora = ahora();
+        while (!pendientes.isEmpty() && !pendientes.peek().getFechaEjecucion().isAfter(ahora)) {
             OperacionProgramada operacion = pendientes.extraerMinimo();
-            String titular = buscarBilletera(operacion.getCodigoOrigen()).getIdentificacionTitular();
+            String titular = titularDe(operacion);
             try {
-                ejecutarMovimiento(operacion.getTipo(), operacion.getCodigoOrigen(),
-                        operacion.getCodigoDestino(), operacion.getValor(), 3);
+                if (operacion.getTipo() == TipoTransaccion.RECARGA) {
+                    recargar(operacion.getCodigoDestino(), operacion.getValor());
+                } else {
+                    ejecutarMovimiento(operacion.getTipo(), operacion.getCodigoOrigen(),
+                            operacion.getCodigoDestino(), operacion.getValor(), 3);
+                }
                 if (operacion.getTipo() == TipoTransaccion.PAGO_PROGRAMADO) {
                     sumarPuntos(titular, BONO_PAGO_PROGRAMADO);
                 }
@@ -303,11 +419,78 @@ public class PlataformaService {
                 ejecutadas++;
             } catch (IllegalArgumentException | IllegalStateException e) {
                 operacion.marcarFallida();
-                notificar(titular, TipoAlerta.PAGO_PROGRAMADO_EJECUTADO,
-                        "La operación " + operacion.getId() + " falló: " + e.getMessage());
+                notificar(titular, TipoAlerta.OPERACION_RECHAZADA,
+                        "La operación programada " + operacion.getId() + " falló: " + e.getMessage());
+                registrarEvento(titular, "PROGRAMADA_FALLIDA", NivelRiesgo.MEDIO,
+                        operacion.getId() + ": " + e.getMessage());
             }
+            programarSiguiente(operacion);
         }
         return ejecutadas;
+    }
+
+    private void programarSiguiente(OperacionProgramada operacion) {
+        if (operacion.tieneSiguiente()) {
+            String id = "P" + (++secuencia);
+            OperacionProgramada siguiente = operacion.crearSiguiente(id);
+            programadas.put(id, siguiente);
+            pendientes.insertar(siguiente);
+        }
+    }
+
+    private String titularDe(OperacionProgramada operacion) {
+        String codigo = operacion.getCodigoOrigen() != null ? operacion.getCodigoOrigen() : operacion.getCodigoDestino();
+        return buscarBilletera(codigo).getIdentificacionTitular();
+    }
+
+    /** Avisa (una sola vez) de las operaciones pendientes que se ejecutarán dentro de las próximas 24 horas. */
+    public int avisarProximas() {
+        LocalDateTime ahora = ahora();
+        LocalDateTime limite = ahora.plusHours(HORAS_AVISO_PROGRAMADA);
+        Cola<String> claves = programadas.claves();
+        int avisadas = 0;
+        while (!claves.isEmpty()) {
+            OperacionProgramada operacion = programadas.get(claves.desencolar());
+            LocalDateTime fecha = operacion.getFechaEjecucion();
+            if (operacion.getEstado() == EstadoOperacionProgramada.PENDIENTE && !operacion.isAvisada()
+                    && fecha.isAfter(ahora) && !fecha.isAfter(limite)) {
+                operacion.marcarAvisada();
+                notificar(titularDe(operacion), TipoAlerta.PROGRAMADA_PROXIMA,
+                        "La operación " + operacion.getId() + " (" + operacion.getTipo() + " de "
+                                + operacion.getValor().toPlainString() + ") se ejecutará el " + fecha);
+                avisadas++;
+            }
+        }
+        return avisadas;
+    }
+
+    // ---------- Reloj simulado ----------
+
+    /** Hora de la plataforma: la real más el desfase simulado. Todo (fechas, programadas, alertas) usa esta hora. */
+    public LocalDateTime ahora() {
+        return LocalDateTime.now().plus(desfase);
+    }
+
+    public AvanceReloj estadoReloj() {
+        return new AvanceReloj(ahora(), !desfase.isZero(), 0, 0);
+    }
+
+    /** Adelanta el reloj; si 'ejecutar', procesa de una vez las programadas que vencieron (ejecución automática simulada). */
+    public AvanceReloj avanzarReloj(String actor, long minutos, boolean ejecutar) {
+        exigirAdmin(actor, "Solo el administrador puede mover el reloj");
+        if (minutos <= 0) {
+            throw new IllegalArgumentException("Los minutos a avanzar deben ser mayores que cero");
+        }
+        desfase = desfase.plusMinutes(minutos);
+        int ejecutadas = ejecutar ? ejecutarVencidas() : 0;
+        int avisadas = avisarProximas();
+        return new AvanceReloj(ahora(), !desfase.isZero(), avisadas, ejecutadas);
+    }
+
+    public AvanceReloj restablecerReloj(String actor) {
+        exigirAdmin(actor, "Solo el administrador puede mover el reloj");
+        desfase = Duration.ZERO;
+        return estadoReloj();
     }
 
     /** Un usuario normal ve solo las operaciones programadas desde sus billeteras. */
@@ -317,7 +500,8 @@ public class PlataformaService {
         Cola<OperacionProgramada> visibles = new Cola<>();
         while (!claves.isEmpty()) {
             OperacionProgramada operacion = programadas.get(claves.desencolar());
-            if (admin || esBilleteraDe(actor, operacion.getCodigoOrigen())) {
+            if (admin || esBilleteraDe(actor, operacion.getCodigoOrigen() != null
+                    ? operacion.getCodigoOrigen() : operacion.getCodigoDestino())) {
                 visibles.encolar(operacion);
             }
         }
@@ -339,11 +523,13 @@ public class PlataformaService {
         }
         cambiarPuntos(usuario, () -> usuario.restarPuntos(oferta.getPuntosCosto()));
         Beneficio beneficio = new Beneficio(identificacion, oferta.getNombre(),
-                oferta.getPuntosCosto(), LocalDateTime.now());
+                oferta.getPuntosCosto(), ahora());
         beneficios.addLast(beneficio);
         usuario.registrarCanje(beneficio);
         registrarEvento(identificacion, "CANJE_BENEFICIO", NivelRiesgo.BAJO,
                 oferta.getNombre() + " (" + oferta.getPuntosCosto() + " pts)");
+        notificar(identificacion, TipoAlerta.CANJE_REALIZADO,
+                "Canjeaste \"" + oferta.getNombre() + "\" por " + oferta.getPuntosCosto() + " puntos");
         return beneficio;
     }
 
@@ -416,6 +602,318 @@ public class PlataformaService {
         Notificacion[] resultado = new Notificacion[visibles.getSize()];
         for (int i = 0; i < resultado.length; i++) {
             resultado[i] = visibles.desencolar();
+        }
+        return resultado;
+    }
+
+    /** Despacha las notificaciones pendientes: las propias (o todas, si es el administrador). Devuelve cuántas. */
+    public int despacharNotificaciones(String actor) {
+        boolean admin = esAdmin(actor);
+        Cola<Notificacion> copia = notificaciones.clonarCola();
+        int despachadas = 0;
+        while (!copia.isEmpty()) {
+            Notificacion notificacion = copia.desencolar();
+            if (!notificacion.isDespachada() && (admin || notificacion.getIdentificacionUsuario().equals(actor))) {
+                notificacion.marcarDespachada();
+                despachadas++;
+            }
+        }
+        return despachadas;
+    }
+
+    // ---------- Ventajas por nivel ----------
+
+    public VentajaNivel[] ventajasPorNivel() {
+        Nivel[] niveles = Nivel.values();
+        VentajaNivel[] resultado = new VentajaNivel[niveles.length];
+        for (int i = 0; i < niveles.length; i++) {
+            Nivel nivel = niveles[i];
+            Integer maximo = nivel.getMaximo() == Integer.MAX_VALUE ? null : nivel.getMaximo();
+            resultado[i] = new VentajaNivel(nivel, nivel.getMinimo(), maximo, nivel.getLimiteOperacion());
+        }
+        return resultado;
+    }
+
+    private void exigirLimiteDelNivel(Billetera origen, BigDecimal valor) {
+        if (valor == null) {
+            return;   // la validación del valor la hace la billetera
+        }
+        Nivel nivel = usuarios.get(origen.getIdentificacionTitular()).getNivel();
+        BigDecimal limite = nivel.getLimiteOperacion();
+        if (limite != null && valor.compareTo(limite) > 0) {
+            throw new IllegalStateException("Tu nivel " + nivel + " permite operaciones de hasta "
+                    + limite.toPlainString() + " y esta es de " + valor.toPlainString());
+        }
+    }
+
+    // ---------- Comportamiento financiero inusual ----------
+
+    /**
+     * Revisa una operación de salida (retiro, transferencia o pago) contra el historial reciente de su titular.
+     * Reglas: ráfaga de salidas, valor muy alto frente al promedio, repetición hacia un mismo destino,
+     * fragmentación con varias billeteras, cambio brusco de frecuencia y horario no habitual.
+     * Si algo se dispara: marca la transacción con el riesgo, deja un evento en el historial especial,
+     * lo registra en la auditoría y avisa al usuario.
+     */
+    private void evaluarRiesgo(Transaccion transaccion, Billetera origen) {
+        String titular = origen.getIdentificacionTitular();
+        Usuario usuario = usuarios.get(titular);
+        LocalDateTime fecha = transaccion.getFecha();
+        int salidasEn5 = 0, salidasEn10 = 0, salidasPrevias10 = 0, mismoDestino = 0;
+        int previas = 0, previasNocturnas = 0;
+        BigDecimal sumaPrevias = BigDecimal.ZERO;
+        TablaHash<String, Boolean> billeterasHaciaDestino = new TablaHash<>();
+
+        for (NodeSimple<Transaccion> nodo = usuario.historialMovimientos().getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            Transaccion otra = nodo.getData();
+            if (!esSalidaDe(otra, titular)) {
+                continue;
+            }
+            if (otra != transaccion) {
+                previas++;
+                sumaPrevias = sumaPrevias.add(otra.getValor());
+                if (esMadrugada(otra.getFecha().getHour())) {
+                    previasNocturnas++;
+                }
+            }
+            long segundos = Duration.between(otra.getFecha(), fecha).getSeconds();
+            if (segundos < 0) {
+                continue;
+            }
+            if (segundos <= 300) {
+                salidasEn5++;
+            }
+            if (segundos <= 600) {
+                salidasEn10++;
+                if (otra.getCodigoDestino() != null && otra.getCodigoDestino().equals(transaccion.getCodigoDestino())) {
+                    mismoDestino++;
+                    billeterasHaciaDestino.put(otra.getCodigoOrigen(), Boolean.TRUE);
+                }
+            } else if (segundos <= 1200) {
+                salidasPrevias10++;
+            }
+        }
+
+        NivelRiesgo nivel = NivelRiesgo.BAJO;
+        StringBuilder razones = new StringBuilder();
+        if (salidasEn5 >= 4) {
+            nivel = mayor(nivel, salidasEn5 >= 6 ? NivelRiesgo.ALTO : NivelRiesgo.MEDIO);
+            razon(razones, salidasEn5 + " salidas de dinero en 5 minutos");
+        }
+        if (previas >= 3) {
+            BigDecimal promedio = sumaPrevias.divide(BigDecimal.valueOf(previas), 2, java.math.RoundingMode.HALF_UP);
+            if (transaccion.getValor().compareTo(promedio.multiply(BigDecimal.valueOf(3))) > 0) {
+                boolean muyAlto = transaccion.getValor().compareTo(promedio.multiply(BigDecimal.valueOf(10))) > 0;
+                nivel = mayor(nivel, muyAlto ? NivelRiesgo.ALTO : NivelRiesgo.MEDIO);
+                razon(razones, "valor " + transaccion.getValor().toPlainString() + " muy por encima de su promedio ("
+                        + promedio.toPlainString() + ")");
+            }
+        }
+        if (transaccion.getCodigoDestino() != null && mismoDestino >= 3) {
+            nivel = mayor(nivel, NivelRiesgo.MEDIO);
+            razon(razones, mismoDestino + " envíos a " + transaccion.getCodigoDestino() + " en 10 minutos");
+            if (billeterasHaciaDestino.size() >= 2) {
+                nivel = mayor(nivel, NivelRiesgo.ALTO);
+                razon(razones, "montos fragmentados desde " + billeterasHaciaDestino.size() + " billeteras propias");
+            }
+        }
+        if (salidasEn10 >= 4 && salidasPrevias10 >= 1 && salidasEn10 >= 3 * salidasPrevias10) {
+            nivel = mayor(nivel, NivelRiesgo.MEDIO);
+            razon(razones, "la frecuencia pasó de " + salidasPrevias10 + " a " + salidasEn10 + " salidas en 10 minutos");
+        }
+        if (esMadrugada(fecha.getHour()) && previas >= 3 && previasNocturnas == 0) {
+            nivel = mayor(nivel, NivelRiesgo.MEDIO);
+            razon(razones, "actividad de madrugada (" + fecha.getHour() + " h), fuera de su horario habitual");
+        }
+
+        if (nivel != NivelRiesgo.BAJO) {
+            transaccion.marcarRiesgo(nivel);
+            String detalle = "Transacción " + transaccion.getId() + ": " + razones;
+            EventoAuditoria evento = new EventoAuditoria(ahora(), titular, "COMPORTAMIENTO_INUSUAL", nivel, detalle);
+            eventos.encolar(evento);
+            eventosInusuales.addLast(evento);
+            notificar(titular, TipoAlerta.COMPORTAMIENTO_INUSUAL,
+                    "Alerta de seguridad (riesgo " + nivel + ") en " + transaccion.getId() + ": " + razones);
+        }
+    }
+
+    private boolean esSalidaDe(Transaccion transaccion, String titular) {
+        if (transaccion.getCodigoOrigen() == null || transaccion.getTipo() == TipoTransaccion.RECARGA) {
+            return false;
+        }
+        Billetera origen = billeteras.get(transaccion.getCodigoOrigen());
+        return origen != null && origen.getIdentificacionTitular().equals(titular);
+    }
+
+    private static boolean esMadrugada(int hora) {
+        return hora >= 0 && hora < 5;
+    }
+
+    private static NivelRiesgo mayor(NivelRiesgo a, NivelRiesgo b) {
+        return b.ordinal() > a.ordinal() ? b : a;
+    }
+
+    private static void razon(StringBuilder razones, String texto) {
+        if (razones.length() > 0) {
+            razones.append("; ");
+        }
+        razones.append(texto);
+    }
+
+    /** Consulta posterior del historial especial: el administrador ve todos, un usuario los suyos. */
+    public EventoAuditoria[] listarEventosInusuales(String actor, NivelRiesgo minimo) {
+        boolean admin = esAdmin(actor);
+        NivelRiesgo piso = minimo == null ? NivelRiesgo.BAJO : minimo;
+        Cola<EventoAuditoria> visibles = new Cola<>();
+        for (NodeSimple<EventoAuditoria> nodo = eventosInusuales.getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            EventoAuditoria evento = nodo.getData();
+            if (evento.getNivelRiesgo().ordinal() >= piso.ordinal()
+                    && (admin || actor != null && actor.equals(evento.getIdentificacionUsuario()))) {
+                visibles.encolar(evento);
+            }
+        }
+        EventoAuditoria[] resultado = new EventoAuditoria[visibles.getSize()];
+        for (int i = 0; i < resultado.length; i++) {
+            resultado[i] = visibles.desencolar();
+        }
+        return resultado;
+    }
+
+    // ---------- Analítica de movimientos (solo administrador) ----------
+
+    public Conteo[] billeterasMasUsadas(String actor, int n) {
+        exigirAdmin(actor, "Solo el administrador puede ver la analítica");
+        Cola<String> claves = billeteras.claves();
+        Conteo[] todos = new Conteo[claves.getSize()];
+        for (int i = 0; i < todos.length; i++) {
+            Billetera billetera = billeteras.get(claves.desencolar());
+            todos[i] = new Conteo(billetera.getCodigo(), billetera.historialMovimientos().getSize());
+        }
+        return primeros(todos, n);
+    }
+
+    /** Transferencias y pagos programados completados, contados por el titular de la billetera origen. */
+    public Conteo[] usuariosConMasTransferencias(String actor, int n) {
+        exigirAdmin(actor, "Solo el administrador puede ver la analítica");
+        TablaHash<String, Integer> cuentas = new TablaHash<>();
+        for (NodeSimple<Transaccion> nodo = libro.getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            Transaccion t = nodo.getData();
+            boolean esTransferencia = t.getTipo() == TipoTransaccion.TRANSFERENCIA
+                    || t.getTipo() == TipoTransaccion.PAGO_PROGRAMADO;
+            if (esTransferencia && t.getEstado() == EstadoTransaccion.COMPLETADA) {
+                String titular = buscarBilletera(t.getCodigoOrigen()).getIdentificacionTitular();
+                cuentas.put(titular, (cuentas.containsKey(titular) ? cuentas.get(titular) : 0) + 1);
+            }
+        }
+        return primeros(aConteos(cuentas), n);
+    }
+
+    /** Movimientos acumulados por categoría (tipo) de billetera: ahorros, corriente, digital. */
+    public Conteo[] categoriasMasActivas(String actor) {
+        exigirAdmin(actor, "Solo el administrador puede ver la analítica");
+        TipoBilletera[] tipos = TipoBilletera.values();
+        long[] movimientos = new long[tipos.length];
+        Cola<String> claves = billeteras.claves();
+        while (!claves.isEmpty()) {
+            Billetera billetera = billeteras.get(claves.desencolar());
+            movimientos[billetera.getTipo().ordinal()] += billetera.historialMovimientos().getSize();
+        }
+        Conteo[] todos = new Conteo[tipos.length];
+        for (int i = 0; i < tipos.length; i++) {
+            todos[i] = new Conteo(tipos[i].name(), movimientos[i]);
+        }
+        return primeros(todos, tipos.length);
+    }
+
+    /** Cuántas transacciones hay de cada tipo (recarga, retiro, transferencia, pago programado). */
+    public Conteo[] frecuenciaPorTipo(String actor) {
+        exigirAdmin(actor, "Solo el administrador puede ver la analítica");
+        TipoTransaccion[] tipos = TipoTransaccion.values();
+        long[] cuentas = new long[tipos.length];
+        for (NodeSimple<Transaccion> nodo = libro.getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            cuentas[nodo.getData().getTipo().ordinal()]++;
+        }
+        Conteo[] todos = new Conteo[tipos.length];
+        for (int i = 0; i < tipos.length; i++) {
+            todos[i] = new Conteo(tipos[i].name(), cuentas[i]);
+        }
+        return primeros(todos, tipos.length);
+    }
+
+    /** Suma de las transacciones completadas con fecha entre desde y hasta (ambas inclusive). */
+    public MontoMovilizado montoMovilizado(String actor, LocalDateTime desde, LocalDateTime hasta) {
+        exigirAdmin(actor, "Solo el administrador puede ver la analítica");
+        if (desde == null || hasta == null || desde.isAfter(hasta)) {
+            throw new IllegalArgumentException("El rango de fechas no es válido");
+        }
+        int cantidad = 0;
+        BigDecimal total = BigDecimal.ZERO;
+        for (NodeSimple<Transaccion> nodo = libro.getFirstNode(); nodo != null; nodo = nodo.getNext()) {
+            Transaccion t = nodo.getData();
+            if (t.getEstado() == EstadoTransaccion.COMPLETADA
+                    && !t.getFecha().isBefore(desde) && !t.getFecha().isAfter(hasta)) {
+                cantidad++;
+                total = total.add(t.getValor());
+            }
+        }
+        return new MontoMovilizado(desde, hasta, cantidad, total);
+    }
+
+    /** Pares de usuarios con más transferencias entre sí (aristas del grafo, de mayor a menor frecuencia). */
+    public AristaRed[] paresFrecuentes(String actor, int n) {
+        exigirAdmin(actor, "Solo el administrador puede ver la analítica");
+        AristaRed[] aristas = redDeUsuarios(actor).aristas();
+        for (int i = 1; i < aristas.length; i++) {
+            AristaRed actual = aristas[i];
+            int j = i - 1;
+            while (j >= 0 && (aristas[j].cantidad() < actual.cantidad()
+                    || aristas[j].cantidad() == actual.cantidad() && aristas[j].total().compareTo(actual.total()) < 0)) {
+                aristas[j + 1] = aristas[j];
+                j--;
+            }
+            aristas[j + 1] = actual;
+        }
+        int limite = Math.min(validarTop(n), aristas.length);
+        AristaRed[] resultado = new AristaRed[limite];
+        for (int i = 0; i < limite; i++) {
+            resultado[i] = aristas[i];
+        }
+        return resultado;
+    }
+
+    private static int validarTop(int n) {
+        if (n < 1) {
+            throw new IllegalArgumentException("La cantidad a mostrar debe ser al menos 1");
+        }
+        return n;
+    }
+
+    private static Conteo[] aConteos(TablaHash<String, Integer> cuentas) {
+        Cola<String> claves = cuentas.claves();
+        Conteo[] resultado = new Conteo[claves.getSize()];
+        for (int i = 0; i < resultado.length; i++) {
+            String clave = claves.desencolar();
+            resultado[i] = new Conteo(clave, cuentas.get(clave));
+        }
+        return resultado;
+    }
+
+    /** Ordena de mayor a menor cantidad (empate: por clave) y devuelve los n primeros. */
+    private static Conteo[] primeros(Conteo[] datos, int n) {
+        int limite = Math.min(validarTop(n), datos.length);
+        for (int i = 1; i < datos.length; i++) {
+            Conteo actual = datos[i];
+            int j = i - 1;
+            while (j >= 0 && (datos[j].cantidad() < actual.cantidad()
+                    || datos[j].cantidad() == actual.cantidad() && datos[j].clave().compareTo(actual.clave()) > 0)) {
+                datos[j + 1] = datos[j];
+                j--;
+            }
+            datos[j + 1] = actual;
+        }
+        Conteo[] resultado = new Conteo[limite];
+        for (int i = 0; i < limite; i++) {
+            resultado[i] = datos[i];
         }
         return resultado;
     }
@@ -619,11 +1117,13 @@ public class PlataformaService {
         if (!destino.isActiva()) {
             throw new IllegalStateException("La billetera destino está bloqueada");
         }
+        exigirLimiteDelNivel(origen, valor);
         origen.retirar(valor);
         destino.recargar(valor);
         Transaccion transaccion = crearTransaccion(tipo, valor, codigoOrigen, codigoDestino);
         registrarEnLaRed(origen, destino, valor);
         premiar(origen.getIdentificacionTitular(), transaccion, puntosPor(valor, factorPuntos));
+        evaluarRiesgo(transaccion, origen);
         registrarEvento(origen.getIdentificacionTitular(), tipo.name(), NivelRiesgo.BAJO,
                 "Monto " + valor + " hacia " + codigoDestino);
         verificarSaldoBajo(origen);
@@ -633,7 +1133,7 @@ public class PlataformaService {
     private Transaccion crearTransaccion(TipoTransaccion tipo, BigDecimal valor,
                                          String codigoOrigen, String codigoDestino) {
         String id = "T" + (++secuencia);
-        Transaccion transaccion = new Transaccion(id, LocalDateTime.now(), tipo, valor,
+        Transaccion transaccion = new Transaccion(id, ahora(), tipo, valor,
                 codigoOrigen, codigoDestino);
         transacciones.put(id, transaccion);
         libro.addLast(transaccion);
@@ -682,11 +1182,31 @@ public class PlataformaService {
     }
 
     private void registrarEvento(String identificacion, String evento, NivelRiesgo riesgo, String detalle) {
-        eventos.encolar(new EventoAuditoria(LocalDateTime.now(), identificacion, evento, riesgo, detalle));
+        eventos.encolar(new EventoAuditoria(ahora(), identificacion, evento, riesgo, detalle));
     }
 
+    /** Encola la alerta; si el usuario supera el tope de recientes, se descarta su notificación más antigua. */
     private void notificar(String identificacion, TipoAlerta tipo, String mensaje) {
-        notificaciones.encolar(new Notificacion(identificacion, tipo, mensaje, LocalDateTime.now()));
+        notificaciones.encolar(new Notificacion(identificacion, tipo, mensaje, ahora()));
+        int total = (conteoNotificaciones.containsKey(identificacion) ? conteoNotificaciones.get(identificacion) : 0) + 1;
+        if (total > TOPE_NOTIFICACIONES) {
+            descartarMasAntigua(identificacion);
+            total = TOPE_NOTIFICACIONES;
+        }
+        conteoNotificaciones.put(identificacion, total);
+    }
+
+    private void descartarMasAntigua(String identificacion) {
+        int cantidad = notificaciones.getSize();
+        boolean descartada = false;
+        for (int i = 0; i < cantidad; i++) {
+            Notificacion actual = notificaciones.desencolar();
+            if (!descartada && actual.getIdentificacionUsuario().equals(identificacion)) {
+                descartada = true;
+            } else {
+                notificaciones.encolar(actual);
+            }
+        }
     }
 
     private static int puntosPor(BigDecimal valor, int factor) {

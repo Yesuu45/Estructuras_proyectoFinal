@@ -88,6 +88,49 @@
             <tbody id="tabla-red-billeteras"></tbody>
         </table>
     </section>
+
+    <section class="seccion">
+        <h2>Analítica de movimientos</h2>
+        <p class="nota">Consultas e indicadores de uso de la plataforma.</p>
+
+        <h3>Billeteras con mayor uso</h3>
+        <table>
+            <thead><tr><th>#</th><th>Billetera</th><th>Movimientos</th></tr></thead>
+            <tbody id="tabla-billeteras-usadas"></tbody>
+        </table>
+
+        <h3>Usuarios con más transferencias realizadas</h3>
+        <table>
+            <thead><tr><th>#</th><th>Usuario</th><th>Transferencias</th></tr></thead>
+            <tbody id="tabla-usuarios-transferencias"></tbody>
+        </table>
+
+        <h3>Categorías de billetera más activas</h3>
+        <table>
+            <thead><tr><th>Categoría</th><th>Movimientos</th></tr></thead>
+            <tbody id="tabla-categorias"></tbody>
+        </table>
+
+        <h3>Frecuencia de transacciones por tipo</h3>
+        <table>
+            <thead><tr><th>Tipo</th><th>Cantidad</th></tr></thead>
+            <tbody id="tabla-frecuencia-tipos"></tbody>
+        </table>
+
+        <h3>Patrones entre usuarios: pares que más se transfieren</h3>
+        <table>
+            <thead><tr><th>#</th><th>De</th><th>Hacia</th><th>Veces</th><th>Total</th></tr></thead>
+            <tbody id="tabla-pares"></tbody>
+        </table>
+
+        <h3>Monto total movilizado en un rango de fechas</h3>
+        <form id="form-monto" class="formulario">
+            <input name="desde" type="date" required>
+            <input name="hasta" type="date" required>
+            <button type="submit">Calcular</button>
+        </form>
+        <p id="resultado-monto" class="nota"></p>
+    </section>
 </main>
 <script src="js/comun.js"></script>
 <script src="js/reportes.js"></script>

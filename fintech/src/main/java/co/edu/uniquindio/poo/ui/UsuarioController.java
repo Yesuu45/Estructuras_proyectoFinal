@@ -27,4 +27,17 @@ public class UsuarioController {
         return servicio.registrarUsuario(solicitud.identificacion(), solicitud.nombre(),
                 solicitud.correo(), solicitud.clave());
     }
+
+    @PutMapping("/{identificacion}")
+    public Usuario modificar(@PathVariable String identificacion, @RequestBody UsuarioRequest solicitud,
+                             HttpSession sesion) {
+        return servicio.modificarUsuario(SesionActual.identificacion(sesion), identificacion,
+                solicitud.nombre(), solicitud.correo(), solicitud.clave());
+    }
+
+    @DeleteMapping("/{identificacion}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void eliminar(@PathVariable String identificacion, HttpSession sesion) {
+        servicio.eliminarUsuario(SesionActual.identificacion(sesion), identificacion);
+    }
 }

@@ -32,7 +32,23 @@
                 <tbody id="tabla-eventos"></tbody>
             </table>
         </div>
+        <h3>Comportamiento inusual</h3>
+        <p class="nota">Transacciones marcadas por el detector: ráfagas de salidas, valores muy altos, envíos repetidos o fragmentados, cambios bruscos de frecuencia y horarios no habituales.</p>
+        <div class="formulario">
+            <select id="filtro-riesgo">
+                <option value="">Todos los niveles</option>
+                <option value="MEDIO">Riesgo medio o alto</option>
+                <option value="ALTO">Solo riesgo alto</option>
+            </select>
+        </div>
+        <table>
+            <thead>
+                <tr><th>Fecha</th><th>Usuario</th><th>Riesgo</th><th>Detalle</th></tr>
+            </thead>
+            <tbody id="tabla-inusuales"></tbody>
+        </table>
         <h3>Notificaciones</h3>
+        <button type="button" id="btn-despachar" class="secundario">Despachar pendientes</button>
         <table>
             <thead>
                 <tr><th>Fecha</th><th>Usuario</th><th>Tipo</th><th>Mensaje</th><th>Estado</th></tr>

@@ -1,10 +1,8 @@
 package co.edu.uniquindio.poo.modelo;
 
+/** Gravedad de un evento o de una transacción sospechosa. El orden de declaración es de menor a mayor. */
 public enum NivelRiesgo {
-    ASCENSO_NIVEL,
-    SALDO_BAJO,
-    PAGO_PROGRAMADO_EJECUTADO,
     BAJO,
-    COMPORTAMIENTO_INUSUAL,
-    MEDIO
+    MEDIO,
+    ALTO
 }

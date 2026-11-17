@@ -11,7 +11,7 @@ public class Usuario {
     private final String identificacion;
     private String nombre;
     private String correo;
-    private final String claveHash;
+    private String claveHash;
     private final Rol rol;
     private int puntos;
     private final TablaHash<String, Billetera> billeteras;
@@ -35,6 +35,20 @@ public class Usuario {
         this.rol = rol == null ? Rol.USUARIO : rol;
         this.puntos = 0;
         this.billeteras = new TablaHash<>();
+    }
+
+    /** Cambia nombre y correo. Valida antes de asignar: si el nombre es inválido no se modifica nada. */
+    public void actualizarPerfil(String nombreNuevo, String correoNuevo) {
+        String nombreValido = validarTexto(nombreNuevo, "El nombre");
+        this.nombre = nombreValido;
+        this.correo = correoNuevo == null ? "" : correoNuevo.trim();
+    }
+
+    public void cambiarClave(String claveHashNueva) {
+        if (claveHashNueva == null || claveHashNueva.isBlank()) {
+            throw new IllegalArgumentException("La contraseña es obligatoria");
+        }
+        this.claveHash = claveHashNueva;
     }
 
     public void agregarBilletera(Billetera billetera) {

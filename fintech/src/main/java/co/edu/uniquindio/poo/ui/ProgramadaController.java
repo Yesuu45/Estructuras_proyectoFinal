@@ -25,11 +25,12 @@ public class ProgramadaController {
     @ResponseStatus(HttpStatus.CREATED)
     public OperacionProgramada programar(@RequestBody ProgramadaRequest solicitud, HttpSession sesion) {
         return servicio.programar(SesionActual.identificacion(sesion), solicitud.fechaEjecucion(), solicitud.tipo(),
-                solicitud.codigoOrigen(), solicitud.codigoDestino(), solicitud.valor());
+                solicitud.codigoOrigen(), solicitud.codigoDestino(), solicitud.valor(),
+                solicitud.periodicidad(), solicitud.ocurrencias());
     }
 
     @PostMapping("/ejecutar")
-    public ResultadoEjecucion ejecutar() {
-        return new ResultadoEjecucion(servicio.ejecutarPendientes());
+    public ResultadoEjecucion ejecutar(HttpSession sesion) {
+        return new ResultadoEjecucion(servicio.ejecutarPendientes(SesionActual.identificacion(sesion)));
     }
 }

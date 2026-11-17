@@ -1,5 +1,6 @@
 package co.edu.uniquindio.poo.servicio;
 
+import co.edu.uniquindio.poo.modelo.Periodicidad;
 import co.edu.uniquindio.poo.modelo.TipoBilletera;
 import co.edu.uniquindio.poo.modelo.TipoTransaccion;
 import co.edu.uniquindio.poo.modelo.Transaccion;
@@ -98,6 +99,12 @@ public class DatosIniciales implements CommandLineRunner {
                 "LAU-DG", "DAN-DG", valor(20_000));
         servicio.programar("1002", ahora.plusDays(3), TipoTransaccion.TRANSFERENCIA,
                 "CAR-CO", "VAL-AH", valor(25_000));
+        // Periódicas: ahorro semanal de Carlos (empieza en 20 horas, así que ya genera un aviso de "próxima")
+        // y recarga automática mensual de Valentina
+        servicio.programar("1002", ahora.plusHours(20), TipoTransaccion.TRANSFERENCIA,
+                "CAR-CO", "CAR-AH", valor(20_000), Periodicidad.SEMANAL, 4);
+        servicio.programar("1005", ahora.plusDays(5), TipoTransaccion.RECARGA,
+                null, "VAL-AH", valor(10_000), Periodicidad.MENSUAL, 3);
     }
 
     private void billetera(String codigo, String nombre, TipoBilletera tipo, String titular,

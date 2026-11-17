@@ -50,6 +50,18 @@ public class Grafo<V> {
         return true;
     }
 
+    /** Quita un vértice. Solo si no tiene aristas, para no dejar el grafo con extremos sueltos. */
+    public boolean eliminarVertice(V vertice) {
+        if (!existeVertice(vertice)) {
+            return false;
+        }
+        if (gradoSalida(vertice) > 0 || gradoEntrada(vertice) > 0) {
+            throw new IllegalStateException("El vértice " + vertice + " todavía tiene aristas");
+        }
+        adyacencia.remove(vertice);
+        return true;
+    }
+
     public boolean existeVertice(V vertice) {
         return adyacencia.containsKey(vertice);
     }

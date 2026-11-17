@@ -79,3 +79,16 @@ formulario.addEventListener('submit', async (evento) => {
 });
 
 recargarTodo().catch(error => mostrar(error.message, true));
+
+// Ventajas por nivel: se resalta el nivel del usuario que entró
+async function cargarVentajas() {
+    const [ventajas, yo] = await Promise.all([llamar('GET', '/reportes/ventajas'), sesionActual]);
+    document.querySelector('#tabla-ventajas tbody').innerHTML = ventajas.map(v => {
+        const rango = v.puntosMaximo === null ? `${v.puntosMinimo} en adelante` : `${v.puntosMinimo} – ${v.puntosMaximo}`;
+        const limite = v.limiteOperacion === null ? 'Sin límite' : Number(v.limiteOperacion).toLocaleString('es-CO');
+        const mio = yo && yo.rol !== 'ADMIN' && yo.nivel === v.nivel ? ' style="font-weight:700"' : '';
+        return `<tr${mio}><td>${escapar(v.nivel)}${mio ? ' (tú)' : ''}</td><td>${rango}</td><td>${limite}</td></tr>`;
+    }).join('');
+}
+
+cargarVentajas().catch(err => mostrar(err.message, true));

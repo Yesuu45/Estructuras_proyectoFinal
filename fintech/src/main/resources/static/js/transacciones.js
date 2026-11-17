@@ -83,6 +83,7 @@ async function cargarTransacciones() {
             <td>${escapar(t.codigoDestino ?? '—')}</td>
             <td>${escapar(t.estado)}</td>
             <td>${escapar(t.puntosGenerados)}</td>
+            <td><span class="riesgo riesgo-${escapar(t.nivelRiesgo)}">${escapar(t.nivelRiesgo)}</span></td>
             <td>${t.estado === 'COMPLETADA'
                 ? `<button onclick="revertir('${escapar(t.id)}')">Revertir</button>`
                 : ''}</td>

@@ -25,10 +25,21 @@
         <h2>Usuarios</h2>
         <table>
             <thead>
-                <tr><th>Identificación</th><th>Nombre</th><th>Correo</th><th>Puntos</th><th>Nivel</th></tr>
+                <tr><th>Identificación</th><th>Nombre</th><th>Correo</th><th>Puntos</th><th>Nivel</th><th>Acciones</th></tr>
             </thead>
             <tbody id="tabla-usuarios"></tbody>
         </table>
+    </section>
+    <section class="seccion" id="seccion-edicion" hidden>
+        <h2>Modificar usuario <span id="editando"></span></h2>
+        <form id="form-edicion" class="formulario">
+            <input name="nombre" placeholder="Nombre" required>
+            <input name="correo" type="email" placeholder="Correo">
+            <input name="clave" type="password" minlength="6" placeholder="Nueva contraseña (opcional)" autocomplete="new-password">
+            <button type="submit">Guardar cambios</button>
+            <button type="button" id="cancelar-edicion" class="secundario">Cancelar</button>
+        </form>
+        <p class="nota">La identificación no se puede cambiar. Para eliminar a un usuario no debe tener billeteras.</p>
     </section>
 </main>
 <script src="js/comun.js"></script>
