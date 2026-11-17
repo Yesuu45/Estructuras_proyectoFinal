@@ -90,9 +90,3 @@ Los usuarios de demostración se cargan al arrancar y se pueden desactivar con `
 ```
 
 Son 27 pruebas con JUnit que cubren las estructuras de datos y las reglas del servicio (saldos, límites por nivel, reversión, deshacer y operaciones programadas). Las del servicio usan un repositorio simulado con Mockito y no necesitan la base de datos. `FintechApplicationTests` levanta la aplicación completa y sí la necesita.
-
-## Limitaciones
-
-- El árbol de ranking no se balancea; con claves insertadas en orden su altura crece hasta O(n).
-- La búsqueda de ciclos y rutas está acotada a 100 ciclos y a un presupuesto de pasos.
-- Todo el estado se mantiene en memoria y se respalda en la base de datos.
