@@ -2,6 +2,7 @@ package co.edu.uniquindio.poo.servicio;
 
 import co.edu.uniquindio.poo.Estructuras.*;
 import co.edu.uniquindio.poo.modelo.*;
+import co.edu.uniquindio.poo.persistencia.RepositorioPlataforma;
 import co.edu.uniquindio.poo.seguridad.AccesoDenegadoException;
 import co.edu.uniquindio.poo.seguridad.ClaveSegura;
 import org.springframework.stereotype.Service;
@@ -12,7 +13,8 @@ import java.time.LocalDateTime;
 
 /**
  * Fachada de la plataforma. La interfaz (controladores) solo habla con esta clase.
- * Por ahora los datos viven en memoria; la persistencia en PostgreSQL llega después.
+ * Los datos se guardan en PostgreSQL con cada cambio y se reconstruyen al arrancar.
+ * Las notificaciones y el reloj simulado no se guardan: se reinician al arrancar.
  */
 @Service
 public class PlataformaService {
@@ -22,6 +24,10 @@ public class PlataformaService {
     private static final int TOPE_NOTIFICACIONES = 10;       // notificaciones recientes que se conservan por usuario
     private static final int HORAS_AVISO_PROGRAMADA = 24;    // aviso previo de una operación programada
     private static final int MAX_OCURRENCIAS = 52;
+    private static final int MAX_CICLOS = 100;
+    private static final int MAX_RUTAS = 5000;
+
+    private final RepositorioPlataforma repositorio;
 
     private final TablaHash<String, Usuario> usuarios = new TablaHash<>();
     private final TablaHash<String, Billetera> billeteras = new TablaHash<>();
@@ -47,6 +53,107 @@ public class PlataformaService {
     private Duration desfase = Duration.ZERO;
     private int secuencia = 0;
 
+    public PlataformaService(RepositorioPlataforma repositorio) {
+        this.repositorio = repositorio;
+        restaurar();
+    }
+
+    // ---------- Arranque: reconstruir el estado desde PostgreSQL ----------
+
+    /** Carga lo guardado y reconstruye las estructuras derivadas (ranking, redes, pilas, historiales). */
+    private void restaurar() {
+        secuencia = repositorio.ultimaSecuencia();
+
+        Cola<Usuario> cargadosUsuarios = repositorio.cargarUsuarios();
+        while (!cargadosUsuarios.isEmpty()) {
+            Usuario usuario = cargadosUsuarios.desencolar();
+            usuarios.put(usuario.getIdentificacion(), usuario);
+            if (!usuario.esAdmin()) {
+                redUsuarios.agregarVertice(usuario.getIdentificacion());
+                ranking.insertar(clave(usuario));
+            }
+        }
+
+        Cola<Billetera> cargadasBilleteras = repositorio.cargarBilleteras();
+        while (!cargadasBilleteras.isEmpty()) {
+            Billetera billetera = cargadasBilleteras.desencolar();
+            billeteras.put(billetera.getCodigo(), billetera);
+            redBilleteras.agregarVertice(billetera.getCodigo());
+            usuarios.get(billetera.getIdentificacionTitular()).agregarBilletera(billetera);
+        }
+
+        // En orden cronológico: historiales, redes y pilas quedan como al crearse
+        Cola<Transaccion> cargadasTransacciones = repositorio.cargarTransacciones();
+        while (!cargadasTransacciones.isEmpty()) {
+            Transaccion transaccion = cargadasTransacciones.desencolar();
+            transacciones.put(transaccion.getId(), transaccion);
+            libro.addLast(transaccion);
+            registrarEnHistoriales(transaccion, transaccion.getCodigoOrigen(), transaccion.getCodigoDestino());
+            apilarReversible(transaccion);
+            if (transaccion.getEstado() == EstadoTransaccion.REVERTIDA) {
+                // Igual que revertir(): sale de reversibles y queda en deshechas; su movimiento ya no cuenta en la red
+                String codigo = transaccion.getCodigoOrigen() != null
+                        ? transaccion.getCodigoOrigen() : transaccion.getCodigoDestino();
+                Usuario titular = usuarios.get(billeteras.get(codigo).getIdentificacionTitular());
+                titular.pilaReversibles().eliminar(transaccion);
+                titular.pilaDeshechas().push(transaccion);
+            } else if (transaccion.getTipo() == TipoTransaccion.TRANSFERENCIA
+                    || transaccion.getTipo() == TipoTransaccion.PAGO_PROGRAMADO) {
+                registrarEnLaRed(billeteras.get(transaccion.getCodigoOrigen()),
+                        billeteras.get(transaccion.getCodigoDestino()), transaccion.getValor());
+            }
+        }
+
+        Cola<OperacionProgramada> cargadasProgramadas = repositorio.cargarProgramadas(pendientes);
+        while (!cargadasProgramadas.isEmpty()) {
+            OperacionProgramada operacion = cargadasProgramadas.desencolar();
+            programadas.put(operacion.getId(), operacion);
+        }
+
+        Cola<Beneficio> cargadosCanjes = repositorio.cargarBeneficios();
+        while (!cargadosCanjes.isEmpty()) {
+            Beneficio beneficio = cargadosCanjes.desencolar();
+            beneficios.addLast(beneficio);
+            usuarios.get(beneficio.getIdentificacionUsuario()).registrarCanje(beneficio);
+        }
+
+        Cola<EventoAuditoria> cargadosEventos = repositorio.cargarEventos();
+        while (!cargadosEventos.isEmpty()) {
+            EventoAuditoria evento = cargadosEventos.desencolar();
+            eventos.encolar(evento);
+            if ("COMPORTAMIENTO_INUSUAL".equals(evento.getEvento())) {   // verificar que EventoAuditoria tenga getEvento()
+                eventosInusuales.addLast(evento);
+            }
+        }
+    }
+
+    // ---------- Persistencia: escrituras puntuales ----------
+
+    private void persistirUsuario(Usuario usuario) {
+        repositorio.actualizarUsuario(usuario.getIdentificacion(), usuario.getNombre(), usuario.getCorreo(),
+                usuario.hashClave(), usuario.getPuntos(), usuario.getNivel());
+    }
+
+    private void persistirBilletera(Billetera billetera) {
+        repositorio.actualizarBilletera(billetera.getCodigo(), billetera.getSaldo(),
+                billetera.isActiva(), billetera.getUmbralSaldoBajo());
+    }
+
+    private void persistirTransaccion(Transaccion transaccion) {
+        repositorio.actualizarTransaccion(transaccion.getId(), transaccion.getEstado(),
+                transaccion.getPuntosGenerados(), transaccion.getNivelRiesgo());
+    }
+
+    private void persistirProgramada(OperacionProgramada operacion) {
+        repositorio.actualizarProgramada(operacion.getId(), operacion.getEstado(), operacion.isAvisada());
+    }
+
+    private void persistirNuevaProgramada(OperacionProgramada operacion) {
+        repositorio.insertarProgramada(operacion.getId(), operacion.getFechaEjecucion(), operacion.getTipo(),
+                operacion.getValor(), operacion.getCodigoOrigen(), operacion.getCodigoDestino(),
+                operacion.getPeriodicidad(), operacion.getRepeticionesRestantes());
+    }
+
     // ---------- Usuarios ----------
 
     public Usuario registrarUsuario(String identificacion, String nombre, String correo, String clave) {
@@ -57,6 +164,8 @@ public class PlataformaService {
         usuarios.put(usuario.getIdentificacion(), usuario);
         ranking.insertar(clave(usuario));
         redUsuarios.agregarVertice(usuario.getIdentificacion());
+        repositorio.insertarUsuario(usuario.getIdentificacion(), usuario.getNombre(), usuario.getCorreo(),
+                usuario.hashClave(), usuario.getRol(), usuario.getNivel());
         return usuario;
     }
 
@@ -65,8 +174,9 @@ public class PlataformaService {
         if (usuarios.containsKey(identificacion)) {
             return;
         }
-        usuarios.put(identificacion,
-                new Usuario(identificacion, nombre, "", ClaveSegura.generarHash(clave), Rol.ADMIN));
+        Usuario admin = new Usuario(identificacion, nombre, "", ClaveSegura.generarHash(clave), Rol.ADMIN);
+        usuarios.put(identificacion, admin);
+        repositorio.insertarUsuario(identificacion, nombre, "", admin.hashClave(), Rol.ADMIN, admin.getNivel());
     }
 
     /** Mismo mensaje si falla la identificación o la contraseña, para no revelar qué usuarios existen. */
@@ -102,6 +212,7 @@ public class PlataformaService {
         if (cambiaClave) {
             usuario.cambiarClave(hashNuevo);
         }
+        persistirUsuario(usuario);
         registrarEvento(actor, "USUARIO_MODIFICADO", NivelRiesgo.BAJO,
                 "Perfil de " + identificacion + (cambiaClave ? " (con cambio de contraseña)" : ""));
         return usuario;
@@ -124,6 +235,7 @@ public class PlataformaService {
         ranking.eliminar(clave(usuario));
         redUsuarios.eliminarVertice(identificacion);
         usuarios.remove(identificacion);
+        repositorio.eliminarUsuario(identificacion);
         registrarEvento(actor, "USUARIO_ELIMINADO", NivelRiesgo.MEDIO, "Usuario " + identificacion + " eliminado");
     }
 
@@ -153,6 +265,8 @@ public class PlataformaService {
         billeteras.put(codigoFinal, billetera);
         redBilleteras.agregarVertice(codigoFinal);
         titular.agregarBilletera(billetera);
+        repositorio.insertarBilletera(codigoFinal, identificacionTitular, billetera.getNombre(),
+                tipo, billetera.getSaldo(), billetera.getUmbralSaldoBajo());
         return billetera;
     }
 
@@ -235,6 +349,7 @@ public class PlataformaService {
     public Transaccion recargar(String codigoDestino, BigDecimal valor) {
         Billetera destino = buscarBilletera(codigoDestino);
         destino.recargar(valor);
+        persistirBilletera(destino);
         Transaccion transaccion = crearTransaccion(TipoTransaccion.RECARGA, valor, null, codigoDestino);
         premiar(destino.getIdentificacionTitular(), transaccion, puntosPor(valor, 1));
         registrarEvento(destino.getIdentificacionTitular(), "RECARGA", NivelRiesgo.BAJO, "Monto " + valor);
@@ -245,6 +360,7 @@ public class PlataformaService {
         Billetera origen = buscarBilletera(codigoOrigen);
         exigirLimiteDelNivel(origen, valor);
         origen.retirar(valor);
+        persistirBilletera(origen);
         Transaccion transaccion = crearTransaccion(TipoTransaccion.RETIRO, valor, codigoOrigen, null);
         premiar(origen.getIdentificacionTitular(), transaccion, puntosPor(valor, 2));
         evaluarRiesgo(transaccion, origen);
@@ -283,12 +399,15 @@ public class PlataformaService {
 
         if (destino != null) {
             destino.retirar(transaccion.getValor());
+            persistirBilletera(destino);
         }
         if (origen != null) {
             origen.recargar(transaccion.getValor());
+            persistirBilletera(origen);
         }
         cambiarPuntos(usuarioTitular, () -> usuarioTitular.restarPuntos(transaccion.getPuntosGenerados()));
         transaccion.marcarRevertida();
+        persistirTransaccion(transaccion);
         if (origen != null && destino != null) {
             quitarDeLaRed(origen, destino, transaccion.getValor());
         }
@@ -377,6 +496,7 @@ public class PlataformaService {
                 frecuencia, total - 1);
         programadas.put(id, operacion);
         pendientes.insertar(operacion);
+        persistirNuevaProgramada(operacion);
         avisarProximas();
         return operacion;
     }
@@ -424,6 +544,7 @@ public class PlataformaService {
                 registrarEvento(titular, "PROGRAMADA_FALLIDA", NivelRiesgo.MEDIO,
                         operacion.getId() + ": " + e.getMessage());
             }
+            persistirProgramada(operacion);
             programarSiguiente(operacion);
         }
         return ejecutadas;
@@ -435,6 +556,7 @@ public class PlataformaService {
             OperacionProgramada siguiente = operacion.crearSiguiente(id);
             programadas.put(id, siguiente);
             pendientes.insertar(siguiente);
+            persistirNuevaProgramada(siguiente);
         }
     }
 
@@ -455,6 +577,7 @@ public class PlataformaService {
             if (operacion.getEstado() == EstadoOperacionProgramada.PENDIENTE && !operacion.isAvisada()
                     && fecha.isAfter(ahora) && !fecha.isAfter(limite)) {
                 operacion.marcarAvisada();
+                persistirProgramada(operacion);
                 notificar(titularDe(operacion), TipoAlerta.PROGRAMADA_PROXIMA,
                         "La operación " + operacion.getId() + " (" + operacion.getTipo() + " de "
                                 + operacion.getValor().toPlainString() + ") se ejecutará el " + fecha);
@@ -526,6 +649,8 @@ public class PlataformaService {
                 oferta.getPuntosCosto(), ahora());
         beneficios.addLast(beneficio);
         usuario.registrarCanje(beneficio);
+        repositorio.insertarBeneficio(identificacion, beneficio.getDescripcion(),
+                beneficio.getPuntosCosto(), beneficio.getFechaCanje());
         registrarEvento(identificacion, "CANJE_BENEFICIO", NivelRiesgo.BAJO,
                 oferta.getNombre() + " (" + oferta.getPuntosCosto() + " pts)");
         notificar(identificacion, TipoAlerta.CANJE_REALIZADO,
@@ -728,10 +853,13 @@ public class PlataformaService {
 
         if (nivel != NivelRiesgo.BAJO) {
             transaccion.marcarRiesgo(nivel);
+            persistirTransaccion(transaccion);
             String detalle = "Transacción " + transaccion.getId() + ": " + razones;
-            EventoAuditoria evento = new EventoAuditoria(ahora(), titular, "COMPORTAMIENTO_INUSUAL", nivel, detalle);
+            LocalDateTime momento = ahora();
+            EventoAuditoria evento = new EventoAuditoria(momento, titular, "COMPORTAMIENTO_INUSUAL", nivel, detalle);
             eventos.encolar(evento);
             eventosInusuales.addLast(evento);
+            repositorio.insertarEvento(momento, titular, "COMPORTAMIENTO_INUSUAL", nivel, detalle);
             notificar(titular, TipoAlerta.COMPORTAMIENTO_INUSUAL,
                     "Alerta de seguridad (riesgo " + nivel + ") en " + transaccion.getId() + ": " + razones);
         }
@@ -954,9 +1082,6 @@ public class PlataformaService {
         }
     }
 
-    private static final int MAX_CICLOS = 100;
-    private static final int MAX_RUTAS = 5000;
-
     /** Ciclos de dinero (A -> B -> ... -> A) en la red de 'usuarios' o de 'billeteras'. */
     public RutaFrecuente[] ciclosDeTransferencias(String actor, String red) {
         exigirAdmin(actor, "Solo el administrador puede analizar la red de transferencias");
@@ -1153,10 +1278,11 @@ public class PlataformaService {
         return new ClavePuntos(usuario.getPuntos(), usuario.getIdentificacion());
     }
 
-    /** Cambia los puntos de un usuario y lo recoloca en el árbol (su clave depende de los puntos). */
+    /** Cambia los puntos de un usuario, lo recoloca en el árbol y guarda el cambio en la base. */
     private void cambiarPuntos(Usuario usuario, Runnable cambio) {
         if (usuario.esAdmin()) {
             cambio.run();
+            persistirUsuario(usuario);
             return;
         }
         ranking.eliminar(clave(usuario));
@@ -1164,6 +1290,7 @@ public class PlataformaService {
             cambio.run();
         } finally {
             ranking.insertar(clave(usuario));       // vuelve a entrar con los puntos nuevos (o con los de antes si falló)
+            persistirUsuario(usuario);
         }
     }
 
@@ -1270,6 +1397,8 @@ public class PlataformaService {
         exigirLimiteDelNivel(origen, valor);
         origen.retirar(valor);
         destino.recargar(valor);
+        persistirBilletera(origen);
+        persistirBilletera(destino);
         Transaccion transaccion = crearTransaccion(tipo, valor, codigoOrigen, codigoDestino);
         registrarEnLaRed(origen, destino, valor);
         premiar(origen.getIdentificacionTitular(), transaccion, puntosPor(valor, factorPuntos));
@@ -1289,6 +1418,7 @@ public class PlataformaService {
         libro.addLast(transaccion);
         registrarEnHistoriales(transaccion, codigoOrigen, codigoDestino);
         apilarReversible(transaccion);
+        repositorio.insertarTransaccion(id, transaccion.getFecha(), tipo, valor, codigoOrigen, codigoDestino);
         return transaccion;
     }
 
@@ -1310,6 +1440,7 @@ public class PlataformaService {
 
     private void premiar(String identificacion, Transaccion transaccion, int puntos) {
         transaccion.setPuntosGenerados(puntos);
+        persistirTransaccion(transaccion);
         if (puntos > 0) {
             sumarPuntos(identificacion, puntos);
         }
@@ -1331,11 +1462,17 @@ public class PlataformaService {
         }
     }
 
+    /** Guarda el evento en memoria y en la base de datos (auditoría). */
     private void registrarEvento(String identificacion, String evento, NivelRiesgo riesgo, String detalle) {
-        eventos.encolar(new EventoAuditoria(ahora(), identificacion, evento, riesgo, detalle));
+        LocalDateTime momento = ahora();
+        eventos.encolar(new EventoAuditoria(momento, identificacion, evento, riesgo, detalle));
+        repositorio.insertarEvento(momento, identificacion, evento, riesgo, detalle);
     }
 
-    /** Encola la alerta; si el usuario supera el tope de recientes, se descarta su notificación más antigua. */
+    /**
+     * Encola la alerta; si el usuario supera el tope de recientes, se descarta su notificación más antigua.
+     * Las notificaciones no se guardan en la base de datos: se pierden al reiniciar.
+     */
     private void notificar(String identificacion, TipoAlerta tipo, String mensaje) {
         notificaciones.encolar(new Notificacion(identificacion, tipo, mensaje, ahora()));
         int total = (conteoNotificaciones.containsKey(identificacion) ? conteoNotificaciones.get(identificacion) : 0) + 1;

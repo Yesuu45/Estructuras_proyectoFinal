@@ -33,9 +33,15 @@ public class RepositorioPlataforma {
                 identificacion, nombre, correo, claveHash, rol.name(), nivel.name(), ahora());
     }
 
-    public void actualizarUsuario(String identificacion, int puntos, Nivel nivel) {
-        jdbc.update("UPDATE usuarios SET puntos = ?, nivel = ? WHERE identificacion = ?",
-                puntos, nivel.name(), identificacion);
+    public void actualizarUsuario(String identificacion, String nombre, String correo, String claveHash,
+                                  int puntos, Nivel nivel) {
+        jdbc.update("UPDATE usuarios SET nombre = ?, correo = ?, clave_hash = ?, puntos = ?, nivel = ? "
+                + "WHERE identificacion = ?",
+                nombre, correo, claveHash, puntos, nivel.name(), identificacion);
+    }
+
+    public void eliminarUsuario(String identificacion) {
+        jdbc.update("DELETE FROM usuarios WHERE identificacion = ?", identificacion);
     }
 
     public void insertarBilletera(String codigo, String identificacionTitular, String nombre,
@@ -45,32 +51,37 @@ public class RepositorioPlataforma {
                 codigo, identificacionTitular, nombre, tipo.name(), saldo, umbralSaldoBajo);
     }
 
-    public void actualizarBilletera(String codigo, BigDecimal saldo, boolean activa) {
-        jdbc.update("UPDATE billeteras SET saldo = ?, estado = ? WHERE codigo = ?",
-                saldo, activa ? "ACTIVA" : "BLOQUEADA", codigo);
+    public void actualizarBilletera(String codigo, BigDecimal saldo, boolean activa, BigDecimal umbralSaldoBajo) {
+        jdbc.update("UPDATE billeteras SET saldo = ?, estado = ?, umbral_saldo_bajo = ? WHERE codigo = ?",
+                saldo, activa ? "ACTIVA" : "BLOQUEADA", umbralSaldoBajo, codigo);
     }
 
     public void insertarTransaccion(String id, LocalDateTime fecha, TipoTransaccion tipo, BigDecimal valor,
                                     String codigoOrigen, String codigoDestino) {
         jdbc.update("INSERT INTO transacciones (id, fecha, tipo, valor, codigo_origen, codigo_destino, "
-                + "estado, puntos_generados) VALUES (?, ?, ?, ?, ?, ?, 'COMPLETADA', 0)",
+                + "estado, puntos_generados, nivel_riesgo) VALUES (?, ?, ?, ?, ?, ?, 'COMPLETADA', 0, 'BAJO')",
                 id, Timestamp.valueOf(fecha), tipo.name(), valor, codigoOrigen, codigoDestino);
     }
 
-    public void actualizarTransaccion(String id, EstadoTransaccion estado, int puntosGenerados) {
-        jdbc.update("UPDATE transacciones SET estado = ?, puntos_generados = ? WHERE id = ?",
-                estado.name(), puntosGenerados, id);
+    public void actualizarTransaccion(String id, EstadoTransaccion estado, int puntosGenerados,
+                                      NivelRiesgo riesgo) {
+        jdbc.update("UPDATE transacciones SET estado = ?, puntos_generados = ?, nivel_riesgo = ? WHERE id = ?",
+                estado.name(), puntosGenerados, riesgo.name(), id);
     }
 
     public void insertarProgramada(String id, LocalDateTime fechaEjecucion, TipoTransaccion tipo,
-                                   BigDecimal valor, String codigoOrigen, String codigoDestino) {
+                                   BigDecimal valor, String codigoOrigen, String codigoDestino,
+                                   Periodicidad periodicidad, int repeticionesRestantes) {
         jdbc.update("INSERT INTO operaciones_programadas (id, fecha_ejecucion, tipo, valor, codigo_origen, "
-                + "codigo_destino, estado) VALUES (?, ?, ?, ?, ?, ?, 'PENDIENTE')",
-                id, Timestamp.valueOf(fechaEjecucion), tipo.name(), valor, codigoOrigen, codigoDestino);
+                + "codigo_destino, estado, periodicidad, repeticiones_restantes, avisada) "
+                + "VALUES (?, ?, ?, ?, ?, ?, 'PENDIENTE', ?, ?, false)",
+                id, Timestamp.valueOf(fechaEjecucion), tipo.name(), valor, codigoOrigen, codigoDestino,
+                periodicidad.name(), repeticionesRestantes);
     }
 
-    public void actualizarProgramada(String id, EstadoOperacionProgramada estado) {
-        jdbc.update("UPDATE operaciones_programadas SET estado = ? WHERE id = ?", estado.name(), id);
+    public void actualizarProgramada(String id, EstadoOperacionProgramada estado, boolean avisada) {
+        jdbc.update("UPDATE operaciones_programadas SET estado = ?, avisada = ? WHERE id = ?",
+                estado.name(), avisada, id);
     }
 
     public void insertarBeneficio(String identificacion, String descripcion, int puntosCosto, LocalDateTime fecha) {
@@ -82,11 +93,6 @@ public class RepositorioPlataforma {
                                NivelRiesgo riesgo, String detalle) {
         jdbc.update("INSERT INTO auditoria (fecha, identificacion_usuario, evento, nivel_riesgo, detalle) "
                 + "VALUES (?, ?, ?, ?, ?)", Timestamp.valueOf(fecha), identificacion, evento, riesgo.name(), detalle);
-    }
-
-    public void insertarNotificacion(String identificacion, TipoAlerta tipo, String mensaje, LocalDateTime fecha) {
-        jdbc.update("INSERT INTO notificaciones (identificacion_usuario, tipo, mensaje, fecha, despachada) "
-                + "VALUES (?, ?, ?, ?, false)", identificacion, tipo.name(), mensaje, Timestamp.valueOf(fecha));
     }
 
     // ---------- Lecturas ----------
@@ -131,16 +137,19 @@ public class RepositorioPlataforma {
         return cola;
     }
 
+    /** Orden cronológico: por fecha y, si empatan, por el número del id (T2 antes que T10). */
     public Cola<Transaccion> cargarTransacciones() {
         Cola<Transaccion> cola = new Cola<>();
-        jdbc.query("SELECT id, fecha, tipo, valor, codigo_origen, codigo_destino, estado, puntos_generados "
-                + "FROM transacciones ORDER BY id",
+        jdbc.query("SELECT id, fecha, tipo, valor, codigo_origen, codigo_destino, estado, puntos_generados, "
+                + "nivel_riesgo FROM transacciones "
+                + "ORDER BY fecha, CAST(SUBSTRING(id FROM 2) AS INTEGER)",
                 (RowCallbackHandler) rs -> {
                     Transaccion transaccion = new Transaccion(rs.getString("id"),
                             rs.getTimestamp("fecha").toLocalDateTime(),
                             TipoTransaccion.valueOf(rs.getString("tipo")), rs.getBigDecimal("valor"),
                             rs.getString("codigo_origen"), rs.getString("codigo_destino"));
                     transaccion.setPuntosGenerados(rs.getInt("puntos_generados"));
+                    transaccion.marcarRiesgo(NivelRiesgo.valueOf(rs.getString("nivel_riesgo")));
                     if ("REVERTIDA".equals(rs.getString("estado"))) {
                         transaccion.marcarRevertida();
                     }
@@ -152,19 +161,25 @@ public class RepositorioPlataforma {
     /** Devuelve todas las programadas y deja en el montículo solo las pendientes. */
     public Cola<OperacionProgramada> cargarProgramadas(MonticuloBinario<OperacionProgramada> pendientes) {
         Cola<OperacionProgramada> cola = new Cola<>();
-        jdbc.query("SELECT id, fecha_ejecucion, tipo, valor, codigo_origen, codigo_destino, estado "
-                + "FROM operaciones_programadas ORDER BY id",
+        jdbc.query("SELECT id, fecha_ejecucion, tipo, valor, codigo_origen, codigo_destino, estado, "
+                + "periodicidad, repeticiones_restantes, avisada FROM operaciones_programadas "
+                + "ORDER BY fecha_ejecucion, CAST(SUBSTRING(id FROM 2) AS INTEGER)",
                 (RowCallbackHandler) rs -> {
                     OperacionProgramada operacion = new OperacionProgramada(rs.getString("id"),
                             rs.getTimestamp("fecha_ejecucion").toLocalDateTime(),
                             TipoTransaccion.valueOf(rs.getString("tipo")), rs.getBigDecimal("valor"),
-                            rs.getString("codigo_origen"), rs.getString("codigo_destino"));
+                            rs.getString("codigo_origen"), rs.getString("codigo_destino"),
+                            Periodicidad.valueOf(rs.getString("periodicidad")),
+                            rs.getInt("repeticiones_restantes"));
                     String estado = rs.getString("estado");
                     if ("EJECUTADA".equals(estado)) {
                         operacion.marcarEjecutada();
                     } else if ("FALLIDA".equals(estado)) {
                         operacion.marcarFallida();
                     } else {
+                        if (rs.getBoolean("avisada")) {
+                            operacion.marcarAvisada();
+                        }
                         pendientes.insertar(operacion);
                     }
                     cola.encolar(operacion);
@@ -189,15 +204,6 @@ public class RepositorioPlataforma {
                         rs.getTimestamp("fecha").toLocalDateTime(), rs.getString("identificacion_usuario"),
                         rs.getString("evento"), NivelRiesgo.valueOf(rs.getString("nivel_riesgo")),
                         rs.getString("detalle"))));
-        return cola;
-    }
-
-    public Cola<Notificacion> cargarNotificaciones() {
-        Cola<Notificacion> cola = new Cola<>();
-        jdbc.query("SELECT identificacion_usuario, tipo, mensaje, fecha FROM notificaciones ORDER BY id",
-                (RowCallbackHandler) rs -> cola.encolar(new Notificacion(rs.getString("identificacion_usuario"),
-                        TipoAlerta.valueOf(rs.getString("tipo")), rs.getString("mensaje"),
-                        rs.getTimestamp("fecha").toLocalDateTime())));
         return cola;
     }
 
